@@ -30,7 +30,13 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
   const activeVacation = vacations?.find(v => v.status !== 'completed')
   const vacExpDays = activeVacation ? differenceInDays(parseISO(activeVacation.expiry_date), today) : null
 
-  const macroVariant = { junior: 'amber' as const, pleno: 'blue' as const, senior: 'purple' as const }[c.macro_role]
+  const roleVariants: Record<string, "amber" | "blue" | "purple"> = {
+  junior: "amber",
+  pleno: "blue",
+  senior: "purple",
+}
+
+const macroVariant = roleVariants[c.macro_role] ?? "amber"
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
