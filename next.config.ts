@@ -2,7 +2,12 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   experimental: {
-    serverActions: { allowedOrigins: ['localhost:3000'] },
+    serverActions: {
+      allowedOrigins: [
+        'localhost:3000',
+        'teamflow-pearl-seven.vercel.app',
+      ],
+    },
   },
 }
 
