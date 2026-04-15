@@ -64,8 +64,8 @@ export default function GridEditModal({ row }: { row: GridRow }) {
                   <input
                     name="salary_min"
                     type="number"
-                    step="100"
-                    min="1"
+                    step="0.01"
+                    min="0.01"
                     required
                     defaultValue={row.salary_min}
                     className={inputCls}
@@ -78,8 +78,8 @@ export default function GridEditModal({ row }: { row: GridRow }) {
                   <input
                     name="salary_max"
                     type="number"
-                    step="100"
-                    min="1"
+                    step="0.01"
+                    min="0.01"
                     required
                     defaultValue={row.salary_max}
                     className={inputCls}

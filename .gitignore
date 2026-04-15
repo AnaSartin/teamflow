@@ -6,3 +6,7 @@ node_modules
 .claude/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+
+.vercel
+scripts/backup-*.json
+scripts/import-*.mjs
