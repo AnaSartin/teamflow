@@ -52,7 +52,7 @@
 
 | Tecnologia | Versão | Função |
 |-----------|--------|--------|
-| **Next.js** | 15.0.3 | Framework fullstack (App Router) |
+| **Next.js** | 15.2.9 | Framework fullstack (App Router) |
 | **React** | 18.3.1 | Interface do usuário |
 | **TypeScript** | 5.6.3 | Tipagem estática |
 | **Supabase** | 2.45.4 | Banco de dados PostgreSQL + Autenticação |
@@ -139,7 +139,7 @@ EMAIL_MANAGER=gestor@suaempresa.com.br
 
 # ── App ───────────────────────────────────────────────────────
 
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_APP_URL=https://teamflow-pearl-seven.vercel.app
 NEXT_PUBLIC_COMPANY_NAME=Sua Empresa
 
 # ── Cron ─────────────────────────────────────────────────────
@@ -424,5 +424,7 @@ supabase db dump --project-ref <ref-do-projeto> > backup-$(date +%Y%m%d).sql
 ```
 
 ---
+
+**URL de produção:** https://teamflow-pearl-seven.vercel.app
 
 *Documentação técnica — TeamFlow v1.0 · Abril de 2026*
