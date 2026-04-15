@@ -1,6 +1,8 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY ?? 'placeholder')
+}
 
 const FROM = process.env.EMAIL_FROM ?? 'noreply@suaempresa.com.br'
 const COMPANY = process.env.NEXT_PUBLIC_COMPANY_NAME ?? 'TeamFlow'
@@ -66,7 +68,7 @@ export async function sendVacationExpiryAlert(
     </table>
     <p>Acesse o sistema para agendar ou regularizar as férias.</p>`
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM,
     to: recipients,
     subject: `⚠ Alerta de Férias — ${items.length} colaborador(es) com atenção necessária`,
@@ -100,7 +102,7 @@ export async function sendNoPromotionAlert(
       <tbody>${rows}</tbody>
     </table>`
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM,
     to: recipients,
     subject: `📊 Revisão Salarial Pendente — ${items.length} colaborador(es)`,
@@ -134,7 +136,7 @@ export async function sendAnniversaryAlert(
       <tbody>${rows}</tbody>
     </table>`
 
-  return resend.emails.send({
+  return getResend().emails.send({
     from: FROM,
     to: recipients,
     subject: `🎉 Aniversários de Empresa — ${items.length} colaborador(es) nos próximos 30 dias`,
