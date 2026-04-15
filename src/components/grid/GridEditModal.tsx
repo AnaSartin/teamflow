@@ -20,17 +20,36 @@ export default function GridEditModal({ row }: { row: GridRow }) {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
+
     const fd = new FormData(e.currentTarget)
     const salary_min = parseFloat(fd.get('salary_min') as string)
     const salary_max = parseFloat(fd.get('salary_max') as string)
     const notes = fd.get('notes') as string
 
+    // ── Client-side validation (prevents round-trip to server for common errors) ──
+    if (!Number.isFinite(salary_min) || salary_min <= 0) {
+      setError('Salário mínimo inválido. Informe um valor maior que zero.')
+      return
+    }
+    if (!Number.isFinite(salary_max) || salary_max <= 0) {
+      setError('Salário máximo inválido. Informe um valor maior que zero.')
+      return
+    }
+    if (salary_max <= salary_min) {
+      setError('O salário máximo deve ser maior que o mínimo.')
+      return
+    }
+
     startTransition(async () => {
       try {
-        await updateGridPosition(row.id, { salary_min, salary_max, notes })
-        setOpen(false)
-      } catch (err) {
-        setError(String(err))
+        const result = await updateGridPosition(row.id, { salary_min, salary_max, notes })
+        if (result?.error) {
+          setError(result.error)
+        } else {
+          setOpen(false)
+        }
+      } catch {
+        setError('Ocorreu um erro inesperado. Tente novamente.')
       }
     })
   }
@@ -97,12 +116,16 @@ export default function GridEditModal({ row }: { row: GridRow }) {
                 />
               </div>
 
-              {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{error}</p>}
+              {error && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">
+                  {error}
+                </p>
+              )}
 
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => { setOpen(false); setError('') }}
                   className="text-sm px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50"
                 >
                   Cancelar

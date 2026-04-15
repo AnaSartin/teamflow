@@ -29,8 +29,8 @@ export default function QuickStatusSelect({
 
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const newStatus = e.target.value as CollaboratorStatus
-    startTransition(() => {
-      updateCollaboratorStatus(id, newStatus)
+    startTransition(async () => {
+      await updateCollaboratorStatus(id, newStatus)
     })
   }
 

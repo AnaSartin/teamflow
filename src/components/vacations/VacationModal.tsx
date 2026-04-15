@@ -36,32 +36,26 @@ export default function VacationModal({
     setError('')
     const fd = new FormData(e.currentTarget)
     startTransition(async () => {
-      try {
-        await scheduleVacation({
-          collaborator_id: collaborator.id,
-          collaborator_name: collaborator.name,
-          acquisition_start: vacation.acquisition_start,
-          acquisition_end: vacation.acquisition_end,
-          expiry_date: vacation.expiry_date,
-          scheduled_start: fd.get('scheduled_start') as string,
-          scheduled_end: fd.get('scheduled_end') as string,
-          notes: fd.get('notes') as string || undefined,
-        })
-        setOpen(false)
-      } catch (err) {
-        setError(String(err))
-      }
+      const result = await scheduleVacation({
+        collaborator_id: collaborator.id,
+        collaborator_name: collaborator.name,
+        acquisition_start: vacation.acquisition_start,
+        acquisition_end: vacation.acquisition_end,
+        expiry_date: vacation.expiry_date,
+        scheduled_start: fd.get('scheduled_start') as string,
+        scheduled_end: fd.get('scheduled_end') as string,
+        notes: fd.get('notes') as string || undefined,
+      })
+      if (result?.error) setError(result.error)
+      else setOpen(false)
     })
   }
 
   function handleComplete() {
     startTransition(async () => {
-      try {
-        await completeVacation(vacation.id, collaborator.id, collaborator.name)
-        setOpen(false)
-      } catch (err) {
-        setError(String(err))
-      }
+      const result = await completeVacation(vacation.id, collaborator.id, collaborator.name)
+      if (result?.error) setError(result.error)
+      else setOpen(false)
     })
   }
 

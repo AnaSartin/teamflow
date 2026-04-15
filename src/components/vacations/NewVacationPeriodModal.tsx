@@ -23,11 +23,12 @@ export default function NewVacationPeriodModal({ collaborators }: { collaborator
       try {
         const collaborator_id = fd.get('collaborator_id') as string
         const collaborator_name = collaborators.find(c => c.id === collaborator_id)?.name ?? collaborator_id
-        await createVacationPeriod({
+        const result = await createVacationPeriod({
           collaborator_id,
           collaborator_name,
           acquisition_start: fd.get('acquisition_start') as string,
         })
+        if (result?.error) { setError(result.error); return }
         setSuccess(true)
         setTimeout(() => { setOpen(false); setSuccess(false) }, 1500)
       } catch (err) {

@@ -15,19 +15,16 @@ export default function RaiseModal({ collaborator }: { collaborator: Collaborato
     setError('')
     const fd = new FormData(e.currentTarget)
     startTransition(async () => {
-      try {
-        await registerRaise({
-          collaborator_id: collaborator.id,
-          collaborator_name: collaborator.name,
-          salary_before: collaborator.current_salary,
-          salary_after: parseFloat(fd.get('salary_after') as string),
-          event_date: fd.get('event_date') as string,
-          reason: fd.get('reason') as string,
-        })
-        setOpen(false)
-      } catch (err) {
-        setError(String(err))
-      }
+      const result = await registerRaise({
+        collaborator_id: collaborator.id,
+        collaborator_name: collaborator.name,
+        salary_before: collaborator.current_salary,
+        salary_after: parseFloat(fd.get('salary_after') as string),
+        event_date: fd.get('event_date') as string,
+        reason: fd.get('reason') as string,
+      })
+      if (result?.error) setError(result.error)
+      else setOpen(false)
     })
   }
 

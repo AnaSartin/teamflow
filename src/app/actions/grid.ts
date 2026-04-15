@@ -23,48 +23,63 @@ async function logAudit(
       details: details ?? null,
     })
   } catch {
-    // Non-fatal
+    // Non-fatal — audit failure must not block the main operation
   }
 }
 
 // ─── Update grid position ─────────────────────────────────────────────────────
+// Returns { error } instead of throwing so Next.js 15 production
+// doesn't replace the message with the generic "Server Components render" error.
 
 export async function updateGridPosition(
   id: string,
   data: { salary_min: number; salary_max: number; notes?: string }
-) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Não autenticado')
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Sessão expirada. Faça login novamente.' }
 
-  if (data.salary_min <= 0) throw new Error('Salário mínimo deve ser maior que zero')
-  if (data.salary_max <= data.salary_min) throw new Error('Salário máximo deve ser maior que o mínimo')
+    if (!Number.isFinite(data.salary_min) || data.salary_min <= 0)
+      return { error: 'Salário mínimo inválido. Informe um valor maior que zero.' }
 
-  // Fetch current values for audit trail
-  const { data: current } = await supabase
-    .from('salary_grid')
-    .select('full_title, salary_min, salary_max')
-    .eq('id', id)
-    .single()
+    if (!Number.isFinite(data.salary_max) || data.salary_max <= 0)
+      return { error: 'Salário máximo inválido. Informe um valor maior que zero.' }
 
-  const { error } = await supabase
-    .from('salary_grid')
-    .update({
-      salary_min: data.salary_min,
-      salary_max: data.salary_max,
-      notes: data.notes ?? null,
-      updated_at: new Date().toISOString(),
+    if (data.salary_max <= data.salary_min)
+      return { error: 'O salário máximo deve ser maior que o mínimo.' }
+
+    // Fetch current values for audit trail (non-fatal if not found)
+    const { data: current } = await supabase
+      .from('salary_grid')
+      .select('full_title, salary_min, salary_max')
+      .eq('id', id)
+      .single()
+
+    const { error: dbError } = await supabase
+      .from('salary_grid')
+      .update({
+        salary_min: data.salary_min,
+        salary_max: data.salary_max,
+        notes: data.notes ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+
+    if (dbError) return { error: `Erro ao salvar: ${dbError.message}` }
+
+    await logAudit(supabase, user.email ?? 'desconhecido', id, current?.full_title ?? id, {
+      salary_min_before: current?.salary_min,
+      salary_max_before: current?.salary_max,
+      salary_min_after: data.salary_min,
+      salary_max_after: data.salary_max,
     })
-    .eq('id', id)
 
-  if (error) throw new Error(error.message)
-
-  await logAudit(supabase, user.email!, id, current?.full_title ?? id, {
-    salary_min_before: current?.salary_min,
-    salary_max_before: current?.salary_max,
-    salary_min_after: data.salary_min,
-    salary_max_after: data.salary_max,
-  })
-
-  revalidatePath('/grid')
+    revalidatePath('/grid')
+    return {}
+  } catch (e) {
+    // Last-resort catch — should not reach here in normal operation
+    console.error('[updateGridPosition] unexpected error:', e)
+    return { error: 'Ocorreu um erro inesperado. Tente novamente.' }
+  }
 }

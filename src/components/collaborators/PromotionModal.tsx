@@ -17,23 +17,20 @@ export default function PromotionModal({ collaborator }: { collaborator: Collabo
     setError('')
     const fd = new FormData(e.currentTarget)
     startTransition(async () => {
-      try {
-        await registerPromotion({
-          collaborator_id: collaborator.id,
-          collaborator_name: collaborator.name,
-          previous_macro_role: collaborator.macro_role,
-          previous_level: collaborator.grid_level,
-          new_macro_role: newMacro,
-          new_level: newLevel,
-          salary_before: collaborator.current_salary,
-          salary_after: parseFloat(fd.get('salary_after') as string),
-          event_date: fd.get('event_date') as string,
-          notes: fd.get('notes') as string,
-        })
-        setOpen(false)
-      } catch (err) {
-        setError(String(err))
-      }
+      const result = await registerPromotion({
+        collaborator_id: collaborator.id,
+        collaborator_name: collaborator.name,
+        previous_macro_role: collaborator.macro_role,
+        previous_level: collaborator.grid_level,
+        new_macro_role: newMacro,
+        new_level: newLevel,
+        salary_before: collaborator.current_salary,
+        salary_after: parseFloat(fd.get('salary_after') as string),
+        event_date: fd.get('event_date') as string,
+        notes: fd.get('notes') as string,
+      })
+      if (result?.error) setError(result.error)
+      else setOpen(false)
     })
   }
 
