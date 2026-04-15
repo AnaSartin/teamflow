@@ -21,8 +21,11 @@ export default function NewVacationPeriodModal({ collaborators }: { collaborator
     const fd = new FormData(e.currentTarget)
     startTransition(async () => {
       try {
+        const collaborator_id = fd.get('collaborator_id') as string
+        const collaborator_name = collaborators.find(c => c.id === collaborator_id)?.name ?? collaborator_id
         await createVacationPeriod({
-          collaborator_id: fd.get('collaborator_id') as string,
+          collaborator_id,
+          collaborator_name,
           acquisition_start: fd.get('acquisition_start') as string,
         })
         setSuccess(true)

@@ -11,7 +11,7 @@ export default function DeleteCollaboratorButton({ id, name }: { id: string; nam
   function handleDelete() {
     startTransition(async () => {
       try {
-        await deleteCollaborator(id)
+        await deleteCollaborator(id, name)
       } catch (err) {
         setError(String(err))
         setConfirm(false)

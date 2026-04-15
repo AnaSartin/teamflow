@@ -26,7 +26,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public routes
-  if (pathname.startsWith('/login') || pathname.startsWith('/api/cron')) {
+  if (pathname.startsWith('/login') || pathname === '/api/cron/notifications') {
     if (user && pathname === '/login') {
       return NextResponse.redirect(new URL('/dashboard', request.url))
     }

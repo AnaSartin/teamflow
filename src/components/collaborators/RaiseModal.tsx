@@ -18,6 +18,7 @@ export default function RaiseModal({ collaborator }: { collaborator: Collaborato
       try {
         await registerRaise({
           collaborator_id: collaborator.id,
+          collaborator_name: collaborator.name,
           salary_before: collaborator.current_salary,
           salary_after: parseFloat(fd.get('salary_after') as string),
           event_date: fd.get('event_date') as string,

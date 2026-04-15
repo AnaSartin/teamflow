@@ -39,6 +39,7 @@ export default function VacationModal({
       try {
         await scheduleVacation({
           collaborator_id: collaborator.id,
+          collaborator_name: collaborator.name,
           acquisition_start: vacation.acquisition_start,
           acquisition_end: vacation.acquisition_end,
           expiry_date: vacation.expiry_date,
@@ -56,7 +57,7 @@ export default function VacationModal({
   function handleComplete() {
     startTransition(async () => {
       try {
-        await completeVacation(vacation.id, collaborator.id)
+        await completeVacation(vacation.id, collaborator.id, collaborator.name)
         setOpen(false)
       } catch (err) {
         setError(String(err))

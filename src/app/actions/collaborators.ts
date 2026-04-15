@@ -5,6 +5,32 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { buildTitle } from '@/lib/utils'
 import type { CollaboratorFormValues, CollaboratorStatus, MacroRole, GridLevel } from '@/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+// ─── Audit helper ─────────────────────────────────────────────────────────────
+
+async function logAudit(
+  supabase: SupabaseClient,
+  performed_by: string,
+  entity: string,
+  entity_id: string,
+  entity_name: string,
+  action: string,
+  details?: Record<string, unknown>
+) {
+  try {
+    await supabase.from('audit_log').insert({
+      performed_by,
+      entity,
+      entity_id,
+      entity_name,
+      action,
+      details: details ?? null,
+    })
+  } catch {
+    // Non-fatal: audit failure must not break the main operation
+  }
+}
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +64,12 @@ export async function createCollaborator(data: CollaboratorFormValues) {
     .single()
 
   if (error) throw new Error(error.message)
+
+  await logAudit(supabase, user.email!, 'collaborator', collab.id, collab.name, 'create', {
+    macro_role: data.macro_role,
+    grid_level: data.grid_level,
+    team: data.team,
+  })
 
   revalidatePath('/collaborators')
   redirect(`/collaborators/${collab.id}`)
@@ -76,6 +108,11 @@ export async function updateCollaborator(id: string, data: CollaboratorFormValue
 
   if (error) throw new Error(error.message)
 
+  await logAudit(supabase, user.email!, 'collaborator', id, data.name, 'update', {
+    macro_role: data.macro_role,
+    grid_level: data.grid_level,
+  })
+
   revalidatePath(`/collaborators/${id}`)
   revalidatePath('/collaborators')
   redirect(`/collaborators/${id}`)
@@ -93,6 +130,7 @@ export async function registerPromotion(payload: {
   notes: string
   previous_macro_role: MacroRole
   previous_level: GridLevel
+  collaborator_name: string
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -111,6 +149,7 @@ export async function registerPromotion(payload: {
     salary_before: payload.salary_before,
     salary_after: payload.salary_after,
     notes: payload.notes || null,
+    performed_by_email: user.email,
   })
   if (promErr) throw new Error(promErr.message)
 
@@ -121,6 +160,7 @@ export async function registerPromotion(payload: {
     salary_before: payload.salary_before,
     salary_after: payload.salary_after,
     reason: `Promoção para ${full_title}`,
+    performed_by_email: user.email,
   })
   if (salErr) throw new Error(salErr.message)
 
@@ -139,6 +179,13 @@ export async function registerPromotion(payload: {
     .eq('id', payload.collaborator_id)
   if (updErr) throw new Error(updErr.message)
 
+  await logAudit(supabase, user.email!, 'collaborator', payload.collaborator_id, payload.collaborator_name, 'promotion', {
+    from: `${payload.previous_macro_role} N${payload.previous_level}`,
+    to: `${payload.new_macro_role} N${payload.new_level}`,
+    salary_before: payload.salary_before,
+    salary_after: payload.salary_after,
+  })
+
   revalidatePath(`/collaborators/${payload.collaborator_id}`)
 }
 
@@ -150,6 +197,7 @@ export async function registerRaise(payload: {
   salary_after: number
   event_date: string
   reason: string
+  collaborator_name: string
 }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -161,6 +209,7 @@ export async function registerRaise(payload: {
     salary_before: payload.salary_before,
     salary_after: payload.salary_after,
     reason: payload.reason,
+    performed_by_email: user.email,
   })
   if (salErr) throw new Error(salErr.message)
 
@@ -174,12 +223,18 @@ export async function registerRaise(payload: {
     .eq('id', payload.collaborator_id)
   if (updErr) throw new Error(updErr.message)
 
+  await logAudit(supabase, user.email!, 'collaborator', payload.collaborator_id, payload.collaborator_name, 'salary_raise', {
+    salary_before: payload.salary_before,
+    salary_after: payload.salary_after,
+    reason: payload.reason,
+  })
+
   revalidatePath(`/collaborators/${payload.collaborator_id}`)
 }
 
 // ─── Update Status ────────────────────────────────────────────────────────────
 
-export async function updateCollaboratorStatus(id: string, status: CollaboratorStatus) {
+export async function updateCollaboratorStatus(id: string, status: CollaboratorStatus, collaborator_name?: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Não autenticado')
@@ -190,13 +245,15 @@ export async function updateCollaboratorStatus(id: string, status: CollaboratorS
     .eq('id', id)
   if (error) throw new Error(error.message)
 
+  await logAudit(supabase, user.email!, 'collaborator', id, collaborator_name ?? id, 'status_change', { status })
+
   revalidatePath('/collaborators')
   revalidatePath(`/collaborators/${id}`)
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
-export async function deleteCollaborator(id: string) {
+export async function deleteCollaborator(id: string, collaborator_name?: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Não autenticado')
@@ -207,6 +264,8 @@ export async function deleteCollaborator(id: string) {
 
   const { error } = await supabase.from('collaborators').delete().eq('id', id)
   if (error) throw new Error(error.message)
+
+  await logAudit(supabase, user.email!, 'collaborator', id, collaborator_name ?? id, 'delete')
 
   revalidatePath('/collaborators')
   redirect('/collaborators')

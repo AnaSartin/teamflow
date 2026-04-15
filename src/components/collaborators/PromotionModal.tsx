@@ -20,6 +20,7 @@ export default function PromotionModal({ collaborator }: { collaborator: Collabo
       try {
         await registerPromotion({
           collaborator_id: collaborator.id,
+          collaborator_name: collaborator.name,
           previous_macro_role: collaborator.macro_role,
           previous_level: collaborator.grid_level,
           new_macro_role: newMacro,

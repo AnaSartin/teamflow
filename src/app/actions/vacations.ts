@@ -2,11 +2,37 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+// ─── Audit helper ─────────────────────────────────────────────────────────────
+
+async function logAudit(
+  supabase: SupabaseClient,
+  performed_by: string,
+  entity_id: string,
+  entity_name: string,
+  action: string,
+  details?: Record<string, unknown>
+) {
+  try {
+    await supabase.from('audit_log').insert({
+      performed_by,
+      entity: 'vacation',
+      entity_id,
+      entity_name,
+      action,
+      details: details ?? null,
+    })
+  } catch {
+    // Non-fatal
+  }
+}
 
 // ─── Schedule vacation ────────────────────────────────────────────────────────
 
 export async function scheduleVacation(payload: {
   collaborator_id: string
+  collaborator_name: string
   acquisition_start: string
   acquisition_end: string
   expiry_date: string
@@ -63,6 +89,11 @@ export async function scheduleVacation(payload: {
     if (error) throw new Error(error.message)
   }
 
+  await logAudit(supabase, user.email!, payload.collaborator_id, payload.collaborator_name, 'vacation_schedule', {
+    scheduled_start: payload.scheduled_start,
+    scheduled_end: payload.scheduled_end,
+  })
+
   revalidatePath('/vacations')
   revalidatePath(`/collaborators/${payload.collaborator_id}`)
 }
@@ -71,6 +102,7 @@ export async function scheduleVacation(payload: {
 
 export async function createVacationPeriod(payload: {
   collaborator_id: string
+  collaborator_name: string
   acquisition_start: string
 }) {
   const supabase = await createClient()
@@ -94,13 +126,17 @@ export async function createVacationPeriod(payload: {
   })
   if (error) throw new Error(error.message)
 
+  await logAudit(supabase, user.email!, payload.collaborator_id, payload.collaborator_name, 'vacation_period_created', {
+    acquisition_start: payload.acquisition_start,
+  })
+
   revalidatePath('/vacations')
   revalidatePath(`/collaborators/${payload.collaborator_id}`)
 }
 
 // ─── Mark vacation as completed ───────────────────────────────────────────────
 
-export async function completeVacation(id: string, collaborator_id: string) {
+export async function completeVacation(id: string, collaborator_id: string, collaborator_name: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Não autenticado')
@@ -110,6 +146,8 @@ export async function completeVacation(id: string, collaborator_id: string) {
     .update({ status: 'completed', updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw new Error(error.message)
+
+  await logAudit(supabase, user.email!, collaborator_id, collaborator_name, 'vacation_completed', { vacation_id: id })
 
   revalidatePath('/vacations')
   revalidatePath(`/collaborators/${collaborator_id}`)
