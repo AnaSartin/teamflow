@@ -1,12 +1,14 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { LogOut, Bell } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { initials, avatarColor } from '@/lib/utils'
 import type { User } from '@supabase/supabase-js'
+import AlertsPanel from './AlertsPanel'
+import type { AlertItem } from './AlertsPanel'
 
-export default function Topbar({ user }: { user: User }) {
+export default function Topbar({ user, alerts }: { user: User; alerts: AlertItem[] }) {
   const router = useRouter()
 
   async function handleLogout() {
@@ -23,13 +25,13 @@ export default function Topbar({ user }: { user: User }) {
   return (
     <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
       <div className="flex items-center gap-2">
-        {/* Breadcrumb placeholder — pages inject their own title via h1 */}
+        {/* intentionally empty — pages use h1 */}
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors relative">
-          <Bell className="w-4 h-4" />
-        </button>
+        <AlertsPanel alerts={alerts} />
+
+        <div className="w-px h-5 bg-slate-200" />
 
         <div className="flex items-center gap-2.5">
           <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${color}`}>

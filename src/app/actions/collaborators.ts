@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { buildTitle } from '@/lib/utils'
-import type { CollaboratorFormValues, MacroRole, GridLevel } from '@/types'
+import type { CollaboratorFormValues, CollaboratorStatus, MacroRole, GridLevel } from '@/types'
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
@@ -175,4 +175,83 @@ export async function registerRaise(payload: {
   if (updErr) throw new Error(updErr.message)
 
   revalidatePath(`/collaborators/${payload.collaborator_id}`)
+}
+
+// ─── Update Status ────────────────────────────────────────────────────────────
+
+export async function updateCollaboratorStatus(id: string, status: CollaboratorStatus) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Não autenticado')
+
+  const { error } = await supabase
+    .from('collaborators')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/collaborators')
+  revalidatePath(`/collaborators/${id}`)
+}
+
+// ─── Delete ───────────────────────────────────────────────────────────────────
+
+export async function deleteCollaborator(id: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Não autenticado')
+
+  await supabase.from('vacations').delete().eq('collaborator_id', id)
+  await supabase.from('promotion_history').delete().eq('collaborator_id', id)
+  await supabase.from('salary_history').delete().eq('collaborator_id', id)
+
+  const { error } = await supabase.from('collaborators').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/collaborators')
+  redirect('/collaborators')
+}
+
+// ─── Bulk import (CSV) ────────────────────────────────────────────────────────
+
+export interface CSVRow {
+  name: string
+  email: string
+  macro_role: MacroRole
+  grid_level: GridLevel
+  team: string
+  manager: string
+  admission_date: string
+  current_salary: number
+  status: CollaboratorStatus
+  notes?: string
+}
+
+export async function bulkImportCollaborators(rows: CSVRow[]) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Não autenticado')
+
+  const records = rows.map(row => ({
+    name: row.name.trim(),
+    email: row.email.trim().toLowerCase(),
+    macro_role: row.macro_role,
+    grid_level: row.grid_level,
+    full_title: buildTitle(row.macro_role, row.grid_level),
+    team: row.team.trim(),
+    manager: row.manager?.trim() ?? '',
+    admission_date: row.admission_date,
+    current_salary: row.current_salary,
+    status: row.status,
+    notes: row.notes?.trim() ?? null,
+  }))
+
+  const { error, data } = await supabase
+    .from('collaborators')
+    .insert(records)
+    .select('id')
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/collaborators')
+  return { inserted: data?.length ?? 0 }
 }

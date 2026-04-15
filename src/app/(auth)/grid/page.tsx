@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { SectionHeader, Badge } from '@/components/ui'
-import { fmtCurrency, MACRO_LABELS, buildTitle } from '@/lib/utils'
+import { fmtCurrency, MACRO_LABELS } from '@/lib/utils'
 import type { MacroRole, GridLevel } from '@/types'
+import GridEditModal from '@/components/grid/GridEditModal'
 
 export default async function GridPage() {
   const supabase = await createClient()
@@ -46,6 +47,7 @@ export default async function GridPage() {
                 <th className="text-right text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3">Faixa máx.</th>
                 <th className="text-center text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3">Colaboradores</th>
                 <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3">Obs.</th>
+                <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -68,7 +70,10 @@ export default async function GridPage() {
                         {count}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{row.notes ?? '—'}</td>
+                    <td className="px-4 py-3 text-xs text-slate-400 max-w-[160px] truncate">{row.notes ?? '—'}</td>
+                    <td className="px-4 py-3">
+                      <GridEditModal row={{ id: row.id, full_title: row.full_title, salary_min: row.salary_min, salary_max: row.salary_max, notes: row.notes }} />
+                    </td>
                   </tr>
                 )
               })}

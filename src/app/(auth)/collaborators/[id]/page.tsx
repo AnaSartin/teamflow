@@ -6,6 +6,8 @@ import { fmtDate, fmtCurrency, calcTenure, buildTitle, MACRO_LABELS, STATUS_LABE
 import { differenceInMonths, differenceInDays, parseISO } from 'date-fns'
 import PromotionModal from '@/components/collaborators/PromotionModal'
 import RaiseModal from '@/components/collaborators/RaiseModal'
+import DeleteCollaboratorButton from '@/components/collaborators/DeleteCollaboratorButton'
+import type { MacroRole, CollaboratorStatus } from '@/types'
 
 export default async function CollaboratorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -30,13 +32,18 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
   const activeVacation = vacations?.find(v => v.status !== 'completed')
   const vacExpDays = activeVacation ? differenceInDays(parseISO(activeVacation.expiry_date), today) : null
 
-  const roleVariants: Record<string, "amber" | "blue" | "purple"> = {
-  junior: "amber",
-  pleno: "blue",
-  senior: "purple",
-}
+  const macroVariant: Record<MacroRole, 'amber' | 'blue' | 'purple'> = {
+    junior: 'amber',
+    pleno: 'blue',
+    senior: 'purple',
+  }
 
-const macroVariant = roleVariants[c.macro_role] ?? "amber"
+  const statusVariant: Record<CollaboratorStatus, 'green' | 'blue' | 'amber' | 'red'> = {
+    active: 'green',
+    vacation: 'blue',
+    leave: 'amber',
+    terminated: 'red',
+  }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -65,16 +72,24 @@ const macroVariant = roleVariants[c.macro_role] ?? "amber"
               <h1 className="text-xl font-semibold text-slate-900">{c.name}</h1>
               <p className="text-sm text-slate-500 mt-0.5">{c.full_title}</p>
               <div className="flex flex-wrap gap-2 mt-2">
-                <Badge variant={macroVariant}>{MACRO_LABELS[c.macro_role as keyof typeof MACRO_LABELS]}</Badge>
+                <Badge variant={macroVariant[c.macro_role as MacroRole] ?? 'amber'}>
+                  {MACRO_LABELS[c.macro_role as MacroRole]}
+                </Badge>
                 <Badge variant="gray">N{c.grid_level}</Badge>
-                <Badge variant={c.status === 'active' ? 'green' : c.status === 'vacation' ? 'blue' : c.status === 'leave' ? 'amber' : 'red'}>
+                <Badge variant={statusVariant[c.status as CollaboratorStatus] ?? 'gray'}>
                   {STATUS_LABELS[c.status as keyof typeof STATUS_LABELS]}
                 </Badge>
               </div>
             </div>
-            <Link href={`/collaborators/${id}/edit`} className="text-sm border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap">
-              Editar
-            </Link>
+            <div className="flex items-center gap-2 flex-wrap">
+              <DeleteCollaboratorButton id={id} name={c.name} />
+              <Link
+                href={`/collaborators/${id}/edit`}
+                className="text-sm border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium px-3.5 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+              >
+                Editar
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -85,7 +100,7 @@ const macroVariant = roleVariants[c.macro_role] ?? "amber"
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Informações principais</h2>
           <dl className="space-y-2.5">
-            {[
+            {([
               ['E-mail', c.email],
               ['Equipe', c.team],
               ['Gestor', c.manager || '—'],
@@ -94,7 +109,7 @@ const macroVariant = roleVariants[c.macro_role] ?? "amber"
               ['Salário atual', fmtCurrency(c.current_salary)],
               ['Último reajuste', fmtDate(c.last_raise_date)],
               ['Há quanto tempo', monthsSinceRaise !== null ? `${monthsSinceRaise}m atrás` : '—'],
-            ].map(([label, value]) => (
+            ] as [string, string][]).map(([label, value]) => (
               <div key={label} className="flex items-center justify-between text-sm">
                 <dt className="text-slate-500">{label}</dt>
                 <dd className="font-medium text-slate-800">{value}</dd>
@@ -108,12 +123,12 @@ const macroVariant = roleVariants[c.macro_role] ?? "amber"
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Controle de férias</h2>
           {activeVacation ? (
             <dl className="space-y-2.5">
-              {[
+              {([
                 ['Período aquisitivo', `${fmtDate(activeVacation.acquisition_start)} – ${fmtDate(activeVacation.acquisition_end)}`],
                 ['Vencimento', fmtDate(activeVacation.expiry_date)],
                 ['Situação', vacExpDays !== null && vacExpDays < 0 ? `Vencidas há ${Math.abs(vacExpDays)}d` : vacExpDays !== null ? `${vacExpDays}d restantes` : '—'],
                 ['Férias agendadas', activeVacation.scheduled_start ? `${fmtDate(activeVacation.scheduled_start)} → ${fmtDate(activeVacation.scheduled_end)}` : 'Não agendadas'],
-              ].map(([label, value]) => (
+              ] as [string, string][]).map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between text-sm">
                   <dt className="text-slate-500">{label}</dt>
                   <dd className="font-medium text-slate-800">{value}</dd>
@@ -121,7 +136,15 @@ const macroVariant = roleVariants[c.macro_role] ?? "amber"
               ))}
             </dl>
           ) : (
-            <p className="text-sm text-slate-400">Nenhum período de férias registrado.</p>
+            <div className="space-y-3">
+              <p className="text-sm text-slate-400">Nenhum período de férias registrado.</p>
+              <Link
+                href="/vacations"
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Registrar na página de férias →
+              </Link>
+            </div>
           )}
         </div>
       </div>
@@ -136,12 +159,12 @@ const macroVariant = roleVariants[c.macro_role] ?? "amber"
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
+          {([
             ['Última promoção', fmtDate(c.last_promotion_date)],
             ['Meses sem promoção', `${monthsSincePromo}m`],
             ['Próximo nível', c.next_level_forecast || '—'],
             ['Previsão', fmtDate(c.promotion_forecast_date)],
-          ].map(([label, value]) => (
+          ] as [string, string][]).map(([label, value]) => (
             <div key={label} className="bg-slate-50 rounded-lg p-3">
               <p className="text-[11px] text-slate-400 mb-1">{label}</p>
               <p className="text-sm font-semibold text-slate-800">{value}</p>
@@ -157,23 +180,29 @@ const macroVariant = roleVariants[c.macro_role] ?? "amber"
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Histórico de promoções</h2>
           {promoHistory && promoHistory.length > 0 ? (
             <div className="space-y-3">
-              {promoHistory.map(p => (
-                <div key={p.id} className="relative pl-4 border-l-2 border-blue-200">
-                  <p className="text-xs text-slate-400">{fmtDate(p.event_date)}</p>
-                  <p className="text-sm font-medium text-slate-800">
-                    {buildTitle(p.previous_macro_role, p.previous_level)} → {buildTitle(p.new_macro_role, p.new_level)}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {fmtCurrency(p.salary_before)} → {fmtCurrency(p.salary_after)}
-                    {p.salary_before > 0 && (
-                      <span className="text-emerald-600 ml-1">
-                        (+{Math.round(((p.salary_after - p.salary_before) / p.salary_before) * 100)}%)
-                      </span>
-                    )}
-                  </p>
-                  {p.notes && <p className="text-xs text-slate-400 mt-0.5">{p.notes}</p>}
-                </div>
-              ))}
+              {promoHistory.map(p => {
+                const prevTitle = p.previous_macro_role && p.previous_level
+                  ? buildTitle(p.previous_macro_role as MacroRole, p.previous_level as 1 | 2 | 3 | 4)
+                  : '—'
+                const newTitle = buildTitle(p.new_macro_role as MacroRole, p.new_level as 1 | 2 | 3 | 4)
+                return (
+                  <div key={p.id} className="relative pl-4 border-l-2 border-blue-200">
+                    <p className="text-xs text-slate-400">{fmtDate(p.event_date)}</p>
+                    <p className="text-sm font-medium text-slate-800">
+                      {prevTitle} → {newTitle}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {fmtCurrency(p.salary_before)} → {fmtCurrency(p.salary_after)}
+                      {p.salary_before > 0 && (
+                        <span className="text-emerald-600 ml-1">
+                          (+{Math.round(((p.salary_after - p.salary_before) / p.salary_before) * 100)}%)
+                        </span>
+                      )}
+                    </p>
+                    {p.notes && <p className="text-xs text-slate-400 mt-0.5">{p.notes}</p>}
+                  </div>
+                )
+              })}
             </div>
           ) : (
             <p className="text-sm text-slate-400">Nenhuma promoção registrada.</p>
