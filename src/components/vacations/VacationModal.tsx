@@ -20,6 +20,24 @@ interface CollaboratorRef {
   name: string
 }
 
+const DURATION_OPTIONS = [
+  { days: 10, label: '10 dias' },
+  { days: 20, label: '20 dias' },
+  { days: 30, label: '30 dias (completo)' },
+]
+
+function addDaysToDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+function formatDateBR(dateStr: string): string {
+  if (!dateStr) return '—'
+  const [y, m, d] = dateStr.split('-')
+  return `${d}/${m}/${y}`
+}
+
 export default function VacationModal({
   vacation,
   collaborator,
@@ -31,10 +49,21 @@ export default function VacationModal({
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
 
+  const [startDate, setStartDate] = useState(vacation.scheduled_start ?? '')
+  const [duration, setDuration] = useState(30)
+
+  // Calculate end date (return to work = start + duration days)
+  const scheduledEnd = startDate ? addDaysToDate(startDate, duration) : ''
+  // Last day of vacation = scheduled_end - 1
+  const lastVacationDay = startDate ? addDaysToDate(startDate, duration - 1) : ''
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
-    const fd = new FormData(e.currentTarget)
+
+    if (!startDate) { setError('Selecione a data de início das férias.'); return }
+    if (!scheduledEnd) { setError('Erro ao calcular a data de retorno.'); return }
+
     startTransition(async () => {
       const result = await scheduleVacation({
         collaborator_id: collaborator.id,
@@ -42,9 +71,9 @@ export default function VacationModal({
         acquisition_start: vacation.acquisition_start,
         acquisition_end: vacation.acquisition_end,
         expiry_date: vacation.expiry_date,
-        scheduled_start: fd.get('scheduled_start') as string,
-        scheduled_end: fd.get('scheduled_end') as string,
-        notes: fd.get('notes') as string || undefined,
+        scheduled_start: startDate,
+        scheduled_end: scheduledEnd,
+        notes: (e.currentTarget.elements.namedItem('notes') as HTMLInputElement)?.value || undefined,
       })
       if (result?.error) setError(result.error)
       else setOpen(false)
@@ -65,7 +94,7 @@ export default function VacationModal({
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); setError('') }}
         className="text-xs border border-blue-200 text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-md font-medium transition-colors"
       >
         {vacation.scheduled_start ? 'Reagendar' : 'Agendar'}
@@ -79,45 +108,77 @@ export default function VacationModal({
           <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl">
             <h3 className="text-base font-semibold text-slate-800 mb-1">Agendar férias</h3>
             <p className="text-sm text-slate-500 mb-1">{collaborator.name}</p>
+
+            {/* Período aquisitivo info */}
             <div className="text-xs text-slate-400 bg-slate-50 rounded-lg px-3 py-2 mb-4 space-y-0.5">
               <p>Período aquisitivo: {fmtDate(vacation.acquisition_start)} → {fmtDate(vacation.acquisition_end)}</p>
               <p>Vencimento: <span className="font-medium text-amber-600">{fmtDate(vacation.expiry_date)}</span></p>
               {vacation.scheduled_start && (
-                <p>Agendado atualmente: {fmtDate(vacation.scheduled_start)} → {fmtDate(vacation.scheduled_end)}</p>
+                <p>Agendamento atual: {fmtDate(vacation.scheduled_start)} → {fmtDate(vacation.scheduled_end)}</p>
               )}
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Início das férias *</label>
-                  <input
-                    name="scheduled_start"
-                    type="date"
-                    required
-                    min={today}
-                    defaultValue={vacation.scheduled_start ?? today}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Retorno *</label>
-                  <input
-                    name="scheduled_end"
-                    type="date"
-                    required
-                    min={today}
-                    defaultValue={vacation.scheduled_end ?? ''}
-                    className={inputCls}
-                  />
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Início */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Data de início *</label>
+                <input
+                  type="date"
+                  required
+                  min={today}
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Duração */}
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-2">Duração das férias *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {DURATION_OPTIONS.map(opt => (
+                    <button
+                      key={opt.days}
+                      type="button"
+                      onClick={() => setDuration(opt.days)}
+                      className={`py-2 px-3 text-sm rounded-lg border font-medium transition-colors ${
+                        duration === opt.days
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'border-slate-300 text-slate-600 hover:border-blue-400 hover:bg-blue-50'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
               </div>
+
+              {/* Resultado calculado */}
+              {startDate && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 space-y-1">
+                  <p className="text-xs font-medium text-blue-700">Resumo calculado automaticamente</p>
+                  <div className="grid grid-cols-2 gap-x-4 text-xs text-slate-600 mt-1">
+                    <span className="text-slate-500">Início:</span>
+                    <span className="font-medium">{formatDateBR(startDate)}</span>
+                    <span className="text-slate-500">Último dia de férias:</span>
+                    <span className="font-medium">{formatDateBR(lastVacationDay)}</span>
+                    <span className="text-slate-500">Retorno ao trabalho:</span>
+                    <span className="font-medium text-emerald-700">{formatDateBR(scheduledEnd)}</span>
+                    <span className="text-slate-500">Total:</span>
+                    <span className="font-medium">{duration} dias</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Observações */}
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Observações</label>
                 <input name="notes" type="text" className={inputCls} placeholder="Informação adicional..." />
               </div>
 
-              {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{error}</p>}
+              {error && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded px-3 py-2">{error}</p>
+              )}
 
               <div className="flex items-center justify-between gap-2 pt-1">
                 <div>
@@ -142,7 +203,7 @@ export default function VacationModal({
                   </button>
                   <button
                     type="submit"
-                    disabled={isPending}
+                    disabled={isPending || !startDate}
                     className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60"
                   >
                     {isPending ? 'Salvando...' : 'Confirmar'}
