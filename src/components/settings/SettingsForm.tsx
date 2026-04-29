@@ -125,7 +125,7 @@ export default function SettingsForm({
         {saved && <p className="text-sm text-emerald-600 mb-3">Configurações salvas com sucesso!</p>}
 
         <div className="flex justify-end">
-          <button type="submit" disabled={isPending} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
+          <button type="submit" disabled={isPending} className="bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
             {isPending ? 'Salvando...' : 'Salvar configurações'}
           </button>
         </div>

@@ -23,7 +23,7 @@ export default function Topbar({ user, alerts }: { user: User; alerts: AlertItem
   const color = avatarColor(displayName)
 
   return (
-    <header className="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
+    <header className="h-14 bg-white border-b border-slate-200/80 flex items-center justify-between px-6 shrink-0 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <div className="flex items-center gap-2">
         {/* intentionally empty — pages use h1 */}
       </div>
@@ -34,12 +34,12 @@ export default function Topbar({ user, alerts }: { user: User; alerts: AlertItem
         <div className="w-px h-5 bg-slate-200" />
 
         <div className="flex items-center gap-2.5">
-          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${color}`}>
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${color}`}>
             {initials(displayName)}
           </div>
           <div className="hidden sm:block">
-            <p className="text-sm font-medium text-slate-800 leading-none capitalize">{displayName}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">{email}</p>
+            <p className="text-sm font-semibold text-slate-800 leading-none capitalize">{displayName}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5 font-medium">{email}</p>
           </div>
         </div>
 

@@ -143,8 +143,8 @@ export default function VacationModal({
                       onClick={() => setDuration(opt.days)}
                       className={`py-2 px-3 text-sm rounded-lg border font-medium transition-colors ${
                         duration === opt.days
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'border-slate-300 text-slate-600 hover:border-blue-400 hover:bg-blue-50'
+                          ? 'bg-slate-900 border-slate-900 text-white'
+                          : 'border-slate-300 text-slate-600 hover:border-slate-400 hover:bg-slate-50'
                       }`}
                     >
                       {opt.label}
@@ -204,7 +204,7 @@ export default function VacationModal({
                   <button
                     type="submit"
                     disabled={isPending || !startDate}
-                    className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                    className="text-sm bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-60"
                   >
                     {isPending ? 'Salvando...' : 'Confirmar'}
                   </button>

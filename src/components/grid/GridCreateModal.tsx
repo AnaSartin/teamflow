@@ -94,7 +94,7 @@ export default function GridCreateModal() {
     <>
       <button
         onClick={handleOpen}
-        className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3.5 py-2 rounded-lg transition-colors"
+        className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium px-3.5 py-2 rounded-lg transition-colors"
       >
         + Novo cargo
       </button>
@@ -224,7 +224,7 @@ export default function GridCreateModal() {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                  className="text-sm bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-60"
                 >
                   {isPending ? 'Criando...' : 'Criar cargo'}
                 </button>

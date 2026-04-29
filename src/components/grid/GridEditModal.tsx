@@ -133,7 +133,7 @@ export default function GridEditModal({ row }: { row: GridRow }) {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                  className="text-sm bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-60"
                 >
                   {isPending ? 'Salvando...' : 'Salvar'}
                 </button>

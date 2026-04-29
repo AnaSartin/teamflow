@@ -46,7 +46,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   })
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="flex h-screen bg-[#F4F6FA] overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar user={user} alerts={alerts} />

@@ -275,7 +275,7 @@ export default function CSVImport() {
                   type="button"
                   onClick={handleImport}
                   disabled={parsed.length === 0 || isPending}
-                  className="text-sm bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="text-sm bg-slate-900 text-white px-5 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-50"
                 >
                   {isPending ? 'Importando...' : `Importar ${parsed.length > 0 ? `(${parsed.length})` : ''}`}
                 </button>

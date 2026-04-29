@@ -714,7 +714,7 @@ export default async function DashboardPage() {
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Ações rápidas</h2>
             <div className="space-y-2">
               {[
-                { label: '+ Novo colaborador', href: '/collaborators/new', color: 'bg-blue-600 hover:bg-blue-700 text-white' },
+                { label: '+ Novo colaborador', href: '/collaborators/new', color: 'bg-slate-900 hover:bg-slate-800 text-white' },
                 { label: 'Gerenciar equipes', href: '/teams', color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300' },
                 { label: 'Agendar férias', href: '/vacations', color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300' },
                 { label: 'Editar grelha salarial', href: '/grid', color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300' },

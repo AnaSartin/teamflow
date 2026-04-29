@@ -233,7 +233,7 @@ export default function CollaboratorForm({ collaborator, teams = [] }: Props) {
         <button
           type="submit"
           disabled={isPending}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
+          className="bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
         >
           {isPending ? 'Salvando...' : isEdit ? 'Salvar alterações' : 'Cadastrar colaborador'}
         </button>

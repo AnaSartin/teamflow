@@ -121,7 +121,7 @@ export default function CollaboratorsFilters({ teams }: Props) {
           <SlidersHorizontal className="w-3.5 h-3.5" />
           Filtros
           {activeFilters.length > 0 && (
-            <span className="bg-blue-600 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+            <span className="bg-slate-900 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
               {activeFilters.length}
             </span>
           )}
@@ -188,7 +188,7 @@ export default function CollaboratorsFilters({ teams }: Props) {
             <button
               key={f.key}
               onClick={() => update({ [f.key]: '' })}
-              className="inline-flex items-center gap-1 text-xs bg-blue-600 text-white px-2 py-1 rounded-full hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-1 text-xs bg-slate-900 text-white px-2 py-1 rounded-full hover:bg-slate-800 transition-colors"
             >
               {f.label}
               <X className="w-2.5 h-2.5" />

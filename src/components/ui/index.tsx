@@ -6,12 +6,12 @@ import { initials, avatarColor } from '@/lib/utils'
 type BadgeVariant = 'green' | 'red' | 'amber' | 'blue' | 'purple' | 'gray'
 
 const BADGE_CLASSES: Record<BadgeVariant, string> = {
-  green:  'bg-emerald-50  text-emerald-700  border-emerald-200',
-  red:    'bg-red-50      text-red-700      border-red-200',
-  amber:  'bg-amber-50    text-amber-700    border-amber-200',
-  blue:   'bg-blue-50     text-blue-700     border-blue-200',
-  purple: 'bg-purple-50   text-purple-700   border-purple-200',
-  gray:   'bg-slate-100   text-slate-600    border-slate-200',
+  green:  'bg-emerald-50  text-emerald-700  ring-1 ring-emerald-200/80',
+  red:    'bg-red-50      text-red-700      ring-1 ring-red-200/80',
+  amber:  'bg-amber-50    text-amber-700    ring-1 ring-amber-200/80',
+  blue:   'bg-blue-50     text-blue-700     ring-1 ring-blue-200/80',
+  purple: 'bg-violet-50   text-violet-700   ring-1 ring-violet-200/80',
+  gray:   'bg-slate-100   text-slate-600    ring-1 ring-slate-200/60',
 }
 
 export function Badge({ variant = 'gray', children, className }: {
@@ -20,7 +20,11 @@ export function Badge({ variant = 'gray', children, className }: {
   className?: string
 }) {
   return (
-    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border', BADGE_CLASSES[variant], className)}>
+    <span className={cn(
+      'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold tracking-wide',
+      BADGE_CLASSES[variant],
+      className
+    )}>
       {children}
     </span>
   )
@@ -35,20 +39,20 @@ export function StatCard({ label, value, sub, accent }: {
   accent?: 'red' | 'amber' | 'green' | 'blue'
 }) {
   const accentMap = {
-    red:   'border-l-red-400    bg-red-50',
-    amber: 'border-l-amber-400  bg-amber-50',
-    green: 'border-l-emerald-400 bg-emerald-50',
-    blue:  'border-l-blue-400   bg-blue-50',
+    red:   'border-t-2 border-t-red-400',
+    amber: 'border-t-2 border-t-amber-400',
+    green: 'border-t-2 border-t-emerald-400',
+    blue:  'border-t-2 border-t-blue-500',
   }
 
   return (
     <div className={cn(
-      'bg-white rounded-xl border border-slate-200 p-4',
-      accent ? `border-l-4 ${accentMap[accent]}` : ''
+      'bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm',
+      accent ? accentMap[accent] : ''
     )}>
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">{label}</p>
-      <p className="text-2xl font-semibold text-slate-900 tracking-tight">{value}</p>
-      {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-2">{label}</p>
+      <p className="text-2xl font-bold text-slate-900 tracking-tight leading-none">{value}</p>
+      {sub && <p className="text-xs text-slate-400 mt-1.5 font-medium">{sub}</p>}
     </div>
   )
 }
@@ -56,9 +60,9 @@ export function StatCard({ label, value, sub, accent }: {
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
 export function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
-  const sizeClass = { sm: 'w-7 h-7 text-xs', md: 'w-8 h-8 text-sm', lg: 'w-10 h-10 text-base' }[size]
+  const sizeClass = { sm: 'w-7 h-7 text-xs', md: 'w-8 h-8 text-sm', lg: 'w-11 h-11 text-base' }[size]
   return (
-    <div className={cn('rounded-full flex items-center justify-center font-semibold shrink-0', sizeClass, avatarColor(name))}>
+    <div className={cn('rounded-lg flex items-center justify-center font-bold shrink-0', sizeClass, avatarColor(name))}>
       {initials(name)}
     </div>
   )
@@ -72,10 +76,10 @@ export function SectionHeader({ title, description, action }: {
   action?: React.ReactNode
 }) {
   return (
-    <div className="flex items-start justify-between mb-5">
+    <div className="flex items-start justify-between mb-6">
       <div>
-        <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
-        {description && <p className="text-sm text-slate-500 mt-0.5">{description}</p>}
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight">{title}</h1>
+        {description && <p className="text-sm text-slate-500 mt-0.5 font-medium">{description}</p>}
       </div>
       {action}
     </div>
@@ -86,7 +90,7 @@ export function SectionHeader({ title, description, action }: {
 
 export function Empty({ message }: { message: string }) {
   return (
-    <div className="text-center py-12 text-slate-400 text-sm">{message}</div>
+    <div className="text-center py-16 text-slate-400 text-sm font-medium">{message}</div>
   )
 }
 
@@ -97,14 +101,19 @@ export function AlertBanner({ type, children }: {
   children: React.ReactNode
 }) {
   const map = {
-    error:   'bg-red-50 border-red-200 text-red-800',
-    warning: 'bg-amber-50 border-amber-200 text-amber-800',
-    info:    'bg-blue-50 border-blue-200 text-blue-800',
+    error:   'bg-red-50 border border-red-200 text-red-800',
+    warning: 'bg-amber-50 border border-amber-200 text-amber-800',
+    info:    'bg-blue-50 border border-blue-200 text-blue-800',
+  }
+  const icon = {
+    error: '⛔',
+    warning: '⚠️',
+    info: 'ℹ️',
   }
   return (
-    <div className={cn('flex items-start gap-2 text-sm border rounded-lg px-3.5 py-3 mb-4', map[type])}>
-      <span className="mt-0.5">{type === 'error' ? '⚠' : type === 'warning' ? '⚠' : 'ℹ'}</span>
-      <span>{children}</span>
+    <div className={cn('flex items-start gap-2.5 text-sm rounded-lg px-4 py-3 mb-3', map[type])}>
+      <span className="mt-0.5 shrink-0">{icon[type]}</span>
+      <span className="font-medium">{children}</span>
     </div>
   )
 }

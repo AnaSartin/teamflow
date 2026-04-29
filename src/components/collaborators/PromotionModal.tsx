@@ -89,7 +89,7 @@ export default function PromotionModal({ collaborator }: { collaborator: Collabo
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setOpen(false)} className="text-sm px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50">Cancelar</button>
-                <button type="submit" disabled={isPending} className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-60">
+                <button type="submit" disabled={isPending} className="text-sm bg-slate-900 text-white px-4 py-2 rounded-lg hover:bg-slate-800 disabled:opacity-60">
                   {isPending ? 'Salvando...' : 'Registrar'}
                 </button>
               </div>
