@@ -150,11 +150,27 @@ export async function completeVacation(id: string, collaborator_id: string, coll
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'Sessão expirada. Faça login novamente.' }
 
+    // Fetch the vacation to get scheduled_end before completing
+    const { data: vac } = await supabase
+      .from('vacations')
+      .select('scheduled_end')
+      .eq('id', id)
+      .single()
+
     const { error } = await supabase
       .from('vacations')
       .update({ status: 'completed', updated_at: new Date().toISOString() })
       .eq('id', id)
     if (error) return { error: `Erro ao concluir férias: ${error.message}` }
+
+    // Update last_vacation_date on collaborator for vacation intelligence
+    if (vac?.scheduled_end) {
+      const lastVacDate = vac.scheduled_end.split('T')[0]
+      await supabase
+        .from('collaborators')
+        .update({ last_vacation_date: lastVacDate, updated_at: new Date().toISOString() })
+        .eq('id', collaborator_id)
+    }
 
     await logAudit(supabase, user.email ?? 'desconhecido', collaborator_id, collaborator_name, 'vacation_completed', { vacation_id: id })
 

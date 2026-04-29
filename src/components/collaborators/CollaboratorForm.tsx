@@ -3,17 +3,37 @@
 import { useState, useTransition } from 'react'
 import { createCollaborator, updateCollaborator } from '@/app/actions/collaborators'
 import { buildTitle, MACRO_LABELS } from '@/lib/utils'
-import type { Collaborator, MacroRole, GridLevel } from '@/types'
+import type { Collaborator, MacroRole, GridLevel, Team } from '@/types'
 
-type Props = { collaborator?: Collaborator }
+const TEAM_LEVELS = ['N1', 'N2', 'Coordenação']
 
-export default function CollaboratorForm({ collaborator }: Props) {
+const MACRO_OPTIONS = [
+  { value: 'junior', label: 'Júnior' },
+  { value: 'pleno', label: 'Pleno' },
+  { value: 'senior', label: 'Sênior' },
+  { value: 'especialista', label: 'Especialista' },
+  { value: 'coordenador', label: 'Coordenador' },
+  { value: 'gerente', label: 'Gerente' },
+]
+
+type Props = {
+  collaborator?: Collaborator
+  teams?: Team[]
+}
+
+export default function CollaboratorForm({ collaborator, teams = [] }: Props) {
   const isEdit = !!collaborator
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
 
-  const [macroRole, setMacroRole] = useState<MacroRole>(collaborator?.macro_role ?? 'junior')
-  const [gridLevel, setGridLevel] = useState<GridLevel>(collaborator?.grid_level ?? 1)
+  const [macroRole, setMacroRole] = useState<string>(collaborator?.macro_role ?? 'junior')
+  const [gridLevel, setGridLevel] = useState<number>(collaborator?.grid_level ?? 1)
+  const [teamId, setTeamId] = useState<string>(collaborator?.team_id ?? '')
+  const [teamLevel, setTeamLevel] = useState<string>(collaborator?.team_level ?? '')
+
+  // Derive team name for the text field
+  const selectedTeam = teams.find(t => t.id === teamId)
+  const teamName = selectedTeam?.name ?? collaborator?.team ?? ''
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -21,29 +41,29 @@ export default function CollaboratorForm({ collaborator }: Props) {
     const fd = new FormData(e.currentTarget)
 
     const payload = {
-      name:                  fd.get('name') as string,
-      email:                 fd.get('email') as string,
-      macro_role:            fd.get('macro_role') as MacroRole,
-      grid_level:            parseInt(fd.get('grid_level') as string) as GridLevel,
-      team:                  fd.get('team') as string,
-      manager:               fd.get('manager') as string,
-      admission_date:        fd.get('admission_date') as string,
-      current_salary:        parseFloat(fd.get('current_salary') as string),
-      last_raise_date:       fd.get('last_raise_date') as string,
-      last_promotion_date:   fd.get('last_promotion_date') as string,
-      next_level_forecast:   fd.get('next_level_forecast') as string,
+      name:                    fd.get('name') as string,
+      email:                   fd.get('email') as string,
+      macro_role:              macroRole as MacroRole,
+      grid_level:              gridLevel as GridLevel,
+      team:                    teamName,
+      team_id:                 teamId || null,
+      team_level:              teamLevel || null,
+      manager:                 fd.get('manager') as string,
+      admission_date:          fd.get('admission_date') as string,
+      current_salary:          parseFloat(fd.get('current_salary') as string),
+      last_raise_date:         fd.get('last_raise_date') as string,
+      last_promotion_date:     fd.get('last_promotion_date') as string,
+      next_level_forecast:     fd.get('next_level_forecast') as string,
       promotion_forecast_date: fd.get('promotion_forecast_date') as string,
-      status:                fd.get('status') as string,
-      notes:                 fd.get('notes') as string,
+      status:                  fd.get('status') as string,
+      notes:                   fd.get('notes') as string,
     } as Parameters<typeof createCollaborator>[0]
 
     startTransition(async () => {
-      try {
-        if (isEdit) await updateCollaborator(collaborator.id, payload)
-        else await createCollaborator(payload)
-      } catch (err) {
-        setError(String(err))
-      }
+      const result = isEdit
+        ? await updateCollaborator(collaborator.id, payload)
+        : await createCollaborator(payload)
+      if (result?.error) setError(result.error)
     })
   }
 
@@ -69,14 +89,6 @@ export default function CollaboratorForm({ collaborator }: Props) {
             <input name="email" type="email" required defaultValue={collaborator?.email} className={inputCls} placeholder="nome@empresa.com.br" />
           </div>
           <div>
-            <label className={labelCls}>Equipe / Área *</label>
-            <input name="team" required defaultValue={collaborator?.team} className={inputCls} placeholder="0401 - Suporte ao Cliente" />
-          </div>
-          <div>
-            <label className={labelCls}>Gestor responsável</label>
-            <input name="manager" defaultValue={collaborator?.manager} className={inputCls} placeholder="Nome do gestor" />
-          </div>
-          <div>
             <label className={labelCls}>Status *</label>
             <select name="status" required defaultValue={collaborator?.status ?? 'active'} className={inputCls}>
               <option value="active">Ativo</option>
@@ -85,42 +97,94 @@ export default function CollaboratorForm({ collaborator }: Props) {
               <option value="terminated">Desligado</option>
             </select>
           </div>
+          <div>
+            <label className={labelCls}>Gestor responsável</label>
+            <input name="manager" defaultValue={collaborator?.manager} className={inputCls} placeholder="Nome do gestor" />
+          </div>
+        </div>
+      </section>
+
+      {/* Team assignment */}
+      <section className="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 className="text-sm font-semibold text-slate-700 mb-4">Equipe</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Equipe *</label>
+            {teams.length > 0 ? (
+              <select
+                value={teamId}
+                onChange={e => setTeamId(e.target.value)}
+                required
+                className={inputCls}
+              >
+                <option value="">Selecione a equipe...</option>
+                {teams.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}{t.type ? ` (${t.type})` : ''}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                name="team_text"
+                defaultValue={collaborator?.team}
+                onChange={() => {}}
+                className={inputCls}
+                placeholder="Nenhuma equipe cadastrada ainda"
+                readOnly
+              />
+            )}
+            {teams.length === 0 && (
+              <p className="text-xs text-slate-400 mt-1">
+                <a href="/teams" className="text-blue-500 hover:underline">Cadastre equipes</a> para selecionar aqui.
+              </p>
+            )}
+          </div>
+          <div>
+            <label className={labelCls}>Nível na equipe</label>
+            <select
+              value={teamLevel}
+              onChange={e => setTeamLevel(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Sem nível definido</option>
+              {TEAM_LEVELS.map(l => (
+                <option key={l} value={l}>{l}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </section>
 
       {/* Grid position */}
       <section className="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 className="text-sm font-semibold text-slate-700 mb-4">Posição na grelha</h3>
+        <h3 className="text-sm font-semibold text-slate-700 mb-4">Posição na grelha salarial</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className={labelCls}>Cargo macro *</label>
             <select
-              name="macro_role"
-              required
               value={macroRole}
-              onChange={e => setMacroRole(e.target.value as MacroRole)}
+              onChange={e => setMacroRole(e.target.value)}
               className={inputCls}
+              required
             >
-              {Object.entries(MACRO_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
+              {MACRO_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </div>
           <div>
             <label className={labelCls}>Nível *</label>
             <select
-              name="grid_level"
-              required
               value={gridLevel}
-              onChange={e => setGridLevel(parseInt(e.target.value) as GridLevel)}
+              onChange={e => setGridLevel(parseInt(e.target.value))}
               className={inputCls}
+              required
             >
-              {[1, 2, 3, 4].map(l => <option key={l} value={l}>{l}</option>)}
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
           <div>
             <label className={labelCls}>Cargo completo (automático)</label>
-            <input value={buildTitle(macroRole, gridLevel)} readOnly className={`${inputCls} bg-slate-50`} />
+            <input value={buildTitle(macroRole as MacroRole, gridLevel as 1)} readOnly className={`${inputCls} bg-slate-50`} />
           </div>
           <div>
             <label className={labelCls}>Próximo nível previsto</label>
@@ -163,7 +227,7 @@ export default function CollaboratorForm({ collaborator }: Props) {
       </section>
 
       <div className="flex items-center justify-end gap-3 pb-4">
-        <a href="/collaborators" className="text-sm text-slate-600 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
+        <a href={isEdit ? `/collaborators/${collaborator.id}` : '/collaborators'} className="text-sm text-slate-600 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">
           Cancelar
         </a>
         <button

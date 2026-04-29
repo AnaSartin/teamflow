@@ -3,21 +3,38 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { Badge, Avatar, AlertBanner } from '@/components/ui'
 import { fmtDate, fmtCurrency, calcTenure, buildTitle, MACRO_LABELS, STATUS_LABELS } from '@/lib/utils'
-import { differenceInMonths, differenceInDays, parseISO } from 'date-fns'
+import { differenceInMonths, differenceInDays, parseISO, format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import PromotionModal from '@/components/collaborators/PromotionModal'
 import RaiseModal from '@/components/collaborators/RaiseModal'
 import DeleteCollaboratorButton from '@/components/collaborators/DeleteCollaboratorButton'
+import {
+  CreatePromotionPlanModal,
+  ApplyPlanButton,
+  CancelPlanButton,
+} from '@/components/promotion-plans/PromotionPlanModal'
 import type { MacroRole, CollaboratorStatus } from '@/types'
 
 export default async function CollaboratorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data: c }, { data: vacations }, { data: promoHistory }, { data: salaryHistory }] = await Promise.all([
-    supabase.from('collaborators').select('*').eq('id', id).single(),
+  const [
+    { data: c },
+    { data: vacations },
+    { data: promoHistory },
+    { data: salaryHistory },
+    { data: promotionPlans },
+  ] = await Promise.all([
+    supabase.from('collaborators').select('*, teams(name, type)').eq('id', id).single(),
     supabase.from('vacations').select('*').eq('collaborator_id', id).order('acquisition_start', { ascending: false }),
     supabase.from('promotion_history').select('*').eq('collaborator_id', id).order('event_date', { ascending: false }),
     supabase.from('salary_history').select('*').eq('collaborator_id', id).order('event_date', { ascending: false }),
+    supabase
+      .from('promotion_plans')
+      .select('*')
+      .eq('collaborator_id', id)
+      .order('effective_date'),
   ])
 
   if (!c) notFound()
@@ -32,10 +49,15 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
   const activeVacation = vacations?.find(v => v.status !== 'completed')
   const vacExpDays = activeVacation ? differenceInDays(parseISO(activeVacation.expiry_date), today) : null
 
-  const macroVariant: Record<MacroRole, 'amber' | 'blue' | 'purple'> = {
-    junior: 'amber',
-    pleno: 'blue',
-    senior: 'purple',
+  // Promotion plans
+  const plannedPromos = (promotionPlans ?? []).filter(p => p.status === 'planned')
+  const appliedPromos = (promotionPlans ?? []).filter(p => p.status === 'applied')
+
+  const macroVariant = (macro: string): 'amber' | 'blue' | 'purple' | 'gray' => {
+    const MAP: Record<string, 'amber' | 'blue' | 'purple'> = {
+      junior: 'amber', pleno: 'blue', senior: 'purple',
+    }
+    return MAP[macro] ?? 'gray'
   }
 
   const statusVariant: Record<CollaboratorStatus, 'green' | 'blue' | 'amber' | 'red'> = {
@@ -44,6 +66,11 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
     leave: 'amber',
     terminated: 'red',
   }
+
+  // Team name resolution
+  const teamName = (c as Record<string, unknown>).teams
+    ? ((c as Record<string, unknown>).teams as { name: string }).name
+    : c.team
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -62,6 +89,11 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
       {monthsSincePromo >= 18 && (
         <AlertBanner type="warning">{monthsSincePromo} meses sem promoção. Colaborador pode estar elegível para revisão.</AlertBanner>
       )}
+      {plannedPromos.length > 0 && (
+        <AlertBanner type="info">
+          {plannedPromos.length} promoção{plannedPromos.length > 1 ? 'ões' : ''} planejada{plannedPromos.length > 1 ? 's' : ''} — próxima em {format(parseISO(plannedPromos[0].effective_date), 'dd/MM/yyyy', { locale: ptBR })}.
+        </AlertBanner>
+      )}
 
       {/* Header */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 mb-4 flex items-start gap-4">
@@ -72,10 +104,11 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
               <h1 className="text-xl font-semibold text-slate-900">{c.name}</h1>
               <p className="text-sm text-slate-500 mt-0.5">{c.full_title}</p>
               <div className="flex flex-wrap gap-2 mt-2">
-                <Badge variant={macroVariant[c.macro_role as MacroRole] ?? 'amber'}>
-                  {MACRO_LABELS[c.macro_role as MacroRole]}
+                <Badge variant={macroVariant(c.macro_role)}>
+                  {MACRO_LABELS[c.macro_role as MacroRole] ?? c.macro_role}
                 </Badge>
                 <Badge variant="gray">N{c.grid_level}</Badge>
+                {c.team_level && <Badge variant="gray">{c.team_level}</Badge>}
                 <Badge variant={statusVariant[c.status as CollaboratorStatus] ?? 'gray'}>
                   {STATUS_LABELS[c.status as keyof typeof STATUS_LABELS]}
                 </Badge>
@@ -102,7 +135,8 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
           <dl className="space-y-2.5">
             {([
               ['E-mail', c.email],
-              ['Equipe', c.team],
+              ['Equipe', teamName || '—'],
+              ['Nível na equipe', c.team_level ?? '—'],
               ['Gestor', c.manager || '—'],
               ['Admissão', fmtDate(c.admission_date)],
               ['Tempo de empresa', tenure],
@@ -128,6 +162,7 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
                 ['Vencimento', fmtDate(activeVacation.expiry_date)],
                 ['Situação', vacExpDays !== null && vacExpDays < 0 ? `Vencidas há ${Math.abs(vacExpDays)}d` : vacExpDays !== null ? `${vacExpDays}d restantes` : '—'],
                 ['Férias agendadas', activeVacation.scheduled_start ? `${fmtDate(activeVacation.scheduled_start)} → ${fmtDate(activeVacation.scheduled_end)}` : 'Não agendadas'],
+                ['Última conclusão', fmtDate(c.last_vacation_date)],
               ] as [string, string][]).map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between text-sm">
                   <dt className="text-slate-500">{label}</dt>
@@ -138,10 +173,7 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-slate-400">Nenhum período de férias registrado.</p>
-              <Link
-                href="/vacations"
-                className="text-xs text-blue-600 hover:underline"
-              >
+              <Link href="/vacations" className="text-xs text-blue-600 hover:underline">
                 Registrar na página de férias →
               </Link>
             </div>
@@ -154,6 +186,11 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Promoção & reajuste</h2>
           <div className="flex gap-2">
+            <CreatePromotionPlanModal
+              collaboratorId={c.id}
+              collaboratorName={c.name}
+              currentSalary={c.current_salary}
+            />
             <PromotionModal collaborator={c} />
             <RaiseModal collaborator={c} />
           </div>
@@ -173,6 +210,44 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
         </div>
       </div>
 
+      {/* Promotion plans */}
+      {(plannedPromos.length > 0 || appliedPromos.length > 0) && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-4">
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Planos de promoção</h2>
+          <div className="space-y-3">
+            {plannedPromos.map(plan => (
+              <div key={plan.id} className="flex items-center gap-4 bg-purple-50 border border-purple-100 rounded-lg px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-800">
+                    → {plan.new_full_title} · {fmtCurrency(plan.new_salary)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Vigência: {fmtDate(plan.effective_date)}
+                    {plan.notes ? ` · ${plan.notes}` : ''}
+                  </p>
+                </div>
+                <Badge variant="purple">Planejado</Badge>
+                <div className="flex gap-2 shrink-0">
+                  <ApplyPlanButton plan={plan} collaboratorName={c.name} />
+                  <CancelPlanButton planId={plan.id} collaboratorName={c.name} />
+                </div>
+              </div>
+            ))}
+            {appliedPromos.slice(0, 3).map(plan => (
+              <div key={plan.id} className="flex items-center gap-4 bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3 opacity-70">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-700">
+                    ✓ {plan.new_full_title} · {fmtCurrency(plan.new_salary)}
+                  </p>
+                  <p className="text-xs text-slate-500">Aplicado · Vigência: {fmtDate(plan.effective_date)}</p>
+                </div>
+                <Badge variant="green">Aplicado</Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* History */}
       <div className="grid md:grid-cols-2 gap-4">
         {/* Promotion history */}
@@ -182,9 +257,9 @@ export default async function CollaboratorDetailPage({ params }: { params: Promi
             <div className="space-y-3">
               {promoHistory.map(p => {
                 const prevTitle = p.previous_macro_role && p.previous_level
-                  ? buildTitle(p.previous_macro_role as MacroRole, p.previous_level as 1 | 2 | 3 | 4)
+                  ? buildTitle(p.previous_macro_role as MacroRole, p.previous_level as 1)
                   : '—'
-                const newTitle = buildTitle(p.new_macro_role as MacroRole, p.new_level as 1 | 2 | 3 | 4)
+                const newTitle = buildTitle(p.new_macro_role as MacroRole, p.new_level as 1)
                 return (
                   <div key={p.id} className="relative pl-4 border-l-2 border-blue-200">
                     <p className="text-xs text-slate-400">{fmtDate(p.event_date)}</p>

@@ -6,11 +6,13 @@ import {
   differenceInMonths,
   parseISO,
   addYears,
+  addMonths,
   format,
+  isBefore,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Avatar, Badge } from '@/components/ui'
-import type { MacroRole, GridLevel } from '@/types'
+import type { MacroRole } from '@/types'
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -48,97 +50,96 @@ function KpiCard({
   return href ? <Link href={href} className="block h-full hover:opacity-90 transition-opacity">{inner}</Link> : inner
 }
 
-function LevelBar({
-  macro, level, count, total, maxCount,
-}: {
-  macro: MacroRole; level: GridLevel; count: number; total: number; maxCount: number
-}) {
-  const pct = maxCount > 0 ? (count / maxCount) * 100 : 0
-  const barColor = { junior: 'bg-amber-400', pleno: 'bg-blue-500', senior: 'bg-purple-500' }[macro]
-  const label = `${macro[0].toUpperCase()}${level}`
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-mono font-semibold text-slate-500 w-6 shrink-0">{label}</span>
-      <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
-        <div
-          className={`h-full ${barColor} rounded transition-all flex items-center pl-1.5`}
-          style={{ width: `${Math.max(pct, count > 0 ? 8 : 0)}%` }}
-        >
-          {count > 0 && <span className="text-[10px] font-bold text-white">{count}</span>}
-        </div>
-      </div>
-      <span className="text-xs text-slate-400 w-12 text-right shrink-0">
-        {total > 0 ? `${Math.round((count / total) * 100)}%` : '0%'}
-      </span>
-    </div>
-  )
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function DashboardPage() {
   const supabase = await createClient()
   const today = new Date()
 
-  // Single comprehensive query
-  const { data: collaborators } = await supabase
-    .from('collaborators')
-    .select('*, vacations(*)')
-    .neq('status', 'terminated')
-    .order('name')
+  const [
+    { data: collaborators },
+    { data: teams },
+    { data: promotionPlans },
+  ] = await Promise.all([
+    supabase
+      .from('collaborators')
+      .select('*, vacations(*)')
+      .neq('status', 'terminated')
+      .order('name'),
+    supabase.from('teams').select('*').order('name'),
+    supabase
+      .from('promotion_plans')
+      .select('*, collaborators(id, name, team, macro_role, grid_level, current_salary)')
+      .eq('status', 'planned')
+      .order('effective_date'),
+  ])
 
   const all = collaborators ?? []
-  const active = all.filter(c => c.status === 'active')
+  const teamList = teams ?? []
+  const plans = promotionPlans ?? []
+
   const onVacation = all.filter(c => c.status === 'vacation').length
   const onLeave    = all.filter(c => c.status === 'leave').length
 
-  // ── By macro + level ─────────────────────────────────────────────────────
-  type MacroKey = 'junior' | 'pleno' | 'senior'
-  const byMacro: Record<MacroKey, number> = { junior: 0, pleno: 0, senior: 0 }
+  // ── By macro ──────────────────────────────────────────────────────────────
+  const byMacro: Record<string, number> = {}
   const byLevel: Record<string, number> = {}
-  for (const c of all) {
-    byMacro[c.macro_role as MacroKey]++
-    const key = `${c.macro_role}-${c.grid_level}`
-    byLevel[key] = (byLevel[key] ?? 0) + 1
-  }
+  const salaryByMacro: Record<string, { total: number; count: number; min: number; max: number }> = {}
 
-  // ── Salary stats ─────────────────────────────────────────────────────────
-  const salaryByMacro: Record<MacroKey, { total: number; count: number; min: number; max: number }> = {
-    junior: { total: 0, count: 0, min: Infinity, max: 0 },
-    pleno:  { total: 0, count: 0, min: Infinity, max: 0 },
-    senior: { total: 0, count: 0, min: Infinity, max: 0 },
-  }
   for (const c of all) {
-    const s = salaryByMacro[c.macro_role as MacroKey]
-    s.total += c.current_salary
-    s.count++
+    byMacro[c.macro_role] = (byMacro[c.macro_role] ?? 0) + 1
+    const lKey = `${c.macro_role}-${c.grid_level}`
+    byLevel[lKey] = (byLevel[lKey] ?? 0) + 1
+
+    if (!salaryByMacro[c.macro_role]) salaryByMacro[c.macro_role] = { total: 0, count: 0, min: Infinity, max: 0 }
+    const s = salaryByMacro[c.macro_role]
+    s.total += c.current_salary; s.count++
     if (c.current_salary < s.min) s.min = c.current_salary
     if (c.current_salary > s.max) s.max = c.current_salary
   }
 
-  // ── Promotion metrics ────────────────────────────────────────────────────
-  let totalPromoMonths = 0
-  let noPromoCount = 0
+  // ── By team ───────────────────────────────────────────────────────────────
+  const countByTeam: Record<string, number> = {}
+  const countByTeamLevel: Record<string, Record<string, number>> = {}
+
+  for (const c of all) {
+    if (!c.team_id) continue
+    countByTeam[c.team_id] = (countByTeam[c.team_id] ?? 0) + 1
+    if (!countByTeamLevel[c.team_id]) countByTeamLevel[c.team_id] = {}
+    const lvl = c.team_level ?? 'Sem nível'
+    countByTeamLevel[c.team_id][lvl] = (countByTeamLevel[c.team_id][lvl] ?? 0) + 1
+  }
+
+  // ── Promotion metrics ─────────────────────────────────────────────────────
   const urgentAlerts: Array<{
     id: string; name: string; team: string; macro_role: string
     alert: string; detail: string; priority: 'critical' | 'high' | 'medium'
   }> = []
 
-  // ── Vacation metrics ─────────────────────────────────────────────────────
+  // ── Vacation intelligence (simplified model) ───────────────────────────────
+  // Next expiry = last_vacation_date + 12m OR admission_date + 24m if never took vacation
+  const vacExpiredCount_intel: number[] = []
+  const vacExpiringCount_intel: number[] = []
+  const vacOkCount_intel: number[] = []
+
+  // ── Vacation metrics from vacations table ─────────────────────────────────
   let vacExpiredCount   = 0
   let vacExpiringCount  = 0
-  let vacNotScheduledUrgent = 0
 
-  // ── Upcoming vacations ───────────────────────────────────────────────────
+  // ── Upcoming vacations ────────────────────────────────────────────────────
   const upcomingVacations: Array<{
     id: string; name: string; start: string; end: string | null; daysLeft: number
   }> = []
 
-  // ── Anniversaries in 30 days ─────────────────────────────────────────────
+  // ── Anniversaries in 30 days ──────────────────────────────────────────────
   const anniversaries: Array<{
     id: string; name: string; team: string; years: number; date: string
   }> = []
+
+  let totalPromoMonths = 0
+  let noPromoCount = 0
+  const avgSalaryAll = all.length > 0
+    ? all.reduce((s, c) => s + c.current_salary, 0) / all.length : 0
 
   for (const c of all) {
     // Promotion
@@ -155,7 +156,22 @@ export default async function DashboardPage() {
       })
     }
 
-    // Vacations
+    // Vacation intelligence (simplified)
+    const baseDate = c.last_vacation_date
+      ? parseISO(c.last_vacation_date)
+      : addMonths(parseISO(c.admission_date), 12)
+    const nextExpiry = addMonths(baseDate, 12)
+    const daysToExpiry = differenceInDays(nextExpiry, today)
+
+    if (daysToExpiry < 0) {
+      vacExpiredCount_intel.push(daysToExpiry)
+    } else if (daysToExpiry <= 90) {
+      vacExpiringCount_intel.push(daysToExpiry)
+    } else {
+      vacOkCount_intel.push(daysToExpiry)
+    }
+
+    // Vacations table
     const vacList: Array<Record<string, string>> = c.vacations ?? []
     for (const v of vacList) {
       if (v.status === 'completed') continue
@@ -185,7 +201,6 @@ export default async function DashboardPage() {
           priority: 'medium',
         })
       }
-      if (!v.scheduled_start && days <= 120) vacNotScheduledUrgent++
       if (v.scheduled_start && (v.status === 'scheduled' || v.status === 'ongoing')) {
         upcomingVacations.push({
           id: c.id, name: c.name,
@@ -211,9 +226,6 @@ export default async function DashboardPage() {
   }
 
   const avgPromoMonths = all.length > 0 ? Math.round(totalPromoMonths / all.length) : 0
-  const avgSalaryAll = all.length > 0
-    ? all.reduce((s, c) => s + c.current_salary, 0) / all.length
-    : 0
 
   // Sort alerts: critical first
   urgentAlerts.sort((a, b) => {
@@ -224,9 +236,19 @@ export default async function DashboardPage() {
   // Upcoming sorted by start date
   upcomingVacations.sort((a, b) => a.start.localeCompare(b.start))
 
-  const maxLevelCount = Math.max(...(['junior', 'pleno', 'senior'] as MacroKey[]).flatMap(m =>
-    [1, 2, 3, 4].map(l => byLevel[`${m}-${l}`] ?? 0)
-  ), 1)
+  // Promotion plans financial impact
+  const plansImpact = plans.reduce((sum, p) => {
+    const current = p.collaborators?.current_salary ?? 0
+    return sum + (p.new_salary - current)
+  }, 0)
+
+  // Promotion plans by proximity
+  const plansThisMonth = plans.filter(p => {
+    const effDate = parseISO(p.effective_date)
+    return differenceInDays(effDate, today) <= 30
+  })
+
+  const macroKeys = Object.keys(byMacro)
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -254,73 +276,154 @@ export default async function DashboardPage() {
       {/* ── KPI row 1: headcount ── */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KpiCard label="Total ativo" value={all.length} sub="colaboradores" accent="blue" href="/collaborators" />
-        <KpiCard label="Júniores" value={byMacro.junior} sub={`${byMacro.junior > 0 ? Math.round((byMacro.junior/all.length)*100) : 0}% do time`} />
-        <KpiCard label="Plenos" value={byMacro.pleno}  sub={`${byMacro.pleno > 0 ? Math.round((byMacro.pleno/all.length)*100) : 0}% do time`} />
-        <KpiCard label="Sêniores" value={byMacro.senior} sub={`${byMacro.senior > 0 ? Math.round((byMacro.senior/all.length)*100) : 0}% do time`} />
+        <KpiCard label="Equipes" value={teamList.length} sub="grupos ativos" href="/teams" />
         <KpiCard label="Afastados" value={onVacation + onLeave} sub={`${onVacation}f + ${onLeave}af`} accent={onVacation + onLeave > 0 ? 'amber' : undefined} />
+        <KpiCard label="Promoções planejadas" value={plans.length} sub={plans.length > 0 ? `impacto ${fmtCurrency(plansImpact)}/mês` : 'nenhuma planejada'} accent={plans.length > 0 ? 'purple' : undefined} href="/collaborators" />
+        <KpiCard label="Sem promoção +18m" value={noPromoCount} sub="elegíveis para revisão" accent={noPromoCount > 0 ? 'amber' : undefined} href="/collaborators" />
       </div>
 
-      {/* ── KPI row 2: alerts ── */}
+      {/* ── KPI row 2: férias ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard
-          label="Férias vencidas" value={vacExpiredCount}
-          sub="ação imediata" accent={vacExpiredCount > 0 ? 'red' : 'green'}
-          href="/vacations"
-        />
-        <KpiCard
-          label="Férias vencendo 90d" value={vacExpiringCount}
-          sub="agendar brevemente" accent={vacExpiringCount > 0 ? 'amber' : undefined}
-          href="/vacations"
-        />
-        <KpiCard
-          label="Sem promoção +18m" value={noPromoCount}
-          sub="elegíveis para revisão" accent={noPromoCount > 0 ? 'amber' : undefined}
-          href="/collaborators"
-        />
-        <KpiCard
-          label="Média sem promoção" value={`${avgPromoMonths}m`}
-          sub={avgPromoMonths >= 18 ? 'acima do alvo' : 'dentro do alvo'}
-          accent={avgPromoMonths >= 18 ? 'amber' : 'green'}
-        />
+        <KpiCard label="Férias vencidas" value={vacExpiredCount} sub="ação imediata" accent={vacExpiredCount > 0 ? 'red' : 'green'} href="/vacations" />
+        <KpiCard label="Férias vencendo 90d" value={vacExpiringCount} sub="agendar brevemente" accent={vacExpiringCount > 0 ? 'amber' : undefined} href="/vacations" />
+        <KpiCard label="Média sem promoção" value={`${avgPromoMonths}m`} sub={avgPromoMonths >= 18 ? 'acima do alvo' : 'dentro do alvo'} accent={avgPromoMonths >= 18 ? 'amber' : 'green'} />
+        <KpiCard label="Promoções este mês" value={plansThisMonth.length} sub={plansThisMonth.length > 0 ? 'vigência em 30 dias' : 'nenhuma este mês'} accent={plansThisMonth.length > 0 ? 'purple' : undefined} />
       </div>
+
+      {/* ── Team distribution ── */}
+      {teamList.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-800">Distribuição por equipe</h2>
+            <Link href="/teams" className="text-xs text-blue-600 hover:underline">Gerenciar equipes →</Link>
+          </div>
+          <div className="grid md:grid-cols-3 gap-4">
+            {teamList.map(team => {
+              const total = countByTeam[team.id] ?? 0
+              const levels = countByTeamLevel[team.id] ?? {}
+              const pct = all.length > 0 ? Math.round((total / all.length) * 100) : 0
+              return (
+                <div key={team.id} className="border border-slate-100 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{team.name}</p>
+                      {team.type && <p className="text-xs text-slate-400 capitalize">{team.type}</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-blue-700">{total}</p>
+                      <p className="text-xs text-slate-400">{pct}%</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    {['N1', 'N2', 'Coordenação'].map(lvl => {
+                      const count = levels[lvl] ?? 0
+                      const lvlPct = total > 0 ? Math.round((count / total) * 100) : 0
+                      return (
+                        <div key={lvl} className="flex items-center gap-2 text-xs">
+                          <span className="text-slate-500 w-20 shrink-0">{lvl}</span>
+                          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-400 rounded-full" style={{ width: `${lvlPct}%` }} />
+                          </div>
+                          <span className="font-medium text-slate-700 w-4 text-right">{count}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Main content: 3-col grid ── */}
       <div className="grid lg:grid-cols-3 gap-5">
 
-        {/* Col 1-2: Distribution + Salary */}
+        {/* Col 1-2: Distribution + Salary + Plans */}
         <div className="lg:col-span-2 space-y-5">
 
-          {/* Level distribution pyramid */}
+          {/* Level distribution */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-slate-800">Distribuição por nível</h2>
-              <span className="text-xs text-slate-400">{all.length} colaboradores ativos</span>
+              <h2 className="text-sm font-semibold text-slate-800">Distribuição por cargo e nível</h2>
+              <span className="text-xs text-slate-400">{all.length} ativos</span>
             </div>
-            <div className="grid md:grid-cols-3 gap-6">
-              {(['junior', 'pleno', 'senior'] as MacroKey[]).map(macro => (
-                <div key={macro}>
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge variant={macro === 'junior' ? 'amber' : macro === 'pleno' ? 'blue' : 'purple'}>
-                      {MACRO_LABELS[macro]}
-                    </Badge>
-                    <span className="text-xs font-semibold text-slate-600">{byMacro[macro]} total</span>
+            <div className={`grid gap-6 ${macroKeys.length <= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+              {macroKeys.map(macro => {
+                const macroTotal = byMacro[macro] ?? 0
+                const levels = [1, 2, 3, 4].map(l => ({ l, c: byLevel[`${macro}-${l}`] ?? 0 })).filter(x => x.c > 0 || macroTotal > 0)
+                const maxCount = Math.max(...levels.map(x => x.c), 1)
+                const variant = macro === 'junior' ? 'amber' : macro === 'pleno' ? 'blue' : macro === 'senior' ? 'purple' : 'gray'
+                const label = MACRO_LABELS[macro as MacroRole] ?? (macro.charAt(0).toUpperCase() + macro.slice(1))
+                return (
+                  <div key={macro}>
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge variant={variant as 'amber' | 'blue' | 'purple' | 'gray'}>{label}</Badge>
+                      <span className="text-xs font-semibold text-slate-600">{macroTotal} total</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {[1, 2, 3, 4].map(level => {
+                        const count = byLevel[`${macro}-${level}`] ?? 0
+                        const pct = maxCount > 0 ? (count / maxCount) * 100 : 0
+                        const barColor = macro === 'junior' ? 'bg-amber-400' : macro === 'pleno' ? 'bg-blue-500' : macro === 'senior' ? 'bg-purple-500' : 'bg-slate-400'
+                        return (
+                          <div key={level} className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-semibold text-slate-500 w-6 shrink-0">N{level}</span>
+                            <div className="flex-1 h-5 bg-slate-100 rounded overflow-hidden">
+                              <div
+                                className={`h-full ${barColor} rounded transition-all flex items-center pl-1.5`}
+                                style={{ width: `${Math.max(pct, count > 0 ? 8 : 0)}%` }}
+                              >
+                                {count > 0 && <span className="text-[10px] font-bold text-white">{count}</span>}
+                              </div>
+                            </div>
+                            <span className="text-xs text-slate-400 w-8 text-right shrink-0">
+                              {macroTotal > 0 ? `${Math.round((count / macroTotal) * 100)}%` : '0%'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    {([1, 2, 3, 4] as GridLevel[]).map(level => (
-                      <LevelBar
-                        key={level}
-                        macro={macro}
-                        level={level}
-                        count={byLevel[`${macro}-${level}`] ?? 0}
-                        total={byMacro[macro]}
-                        maxCount={maxLevelCount}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
+
+          {/* Promotion plans */}
+          {plans.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-800">Promoções planejadas</h2>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400">Impacto total: <strong className="text-purple-700">{fmtCurrency(plansImpact)}</strong>/mês</span>
+                  <span className="text-xs font-medium bg-purple-100 text-purple-700 rounded-full px-2 py-0.5">{plans.length}</span>
+                </div>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {plans.slice(0, 6).map((plan, i) => {
+                  const collab = plan.collaborators
+                  const daysUntil = differenceInDays(parseISO(plan.effective_date), today)
+                  const isUrgent = daysUntil <= 30
+                  return (
+                    <Link key={i} href={`/collaborators/${collab?.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                      <Avatar name={collab?.name ?? '?'} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{collab?.name}</p>
+                        <p className="text-xs text-slate-400 truncate">→ {plan.new_full_title}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-xs font-semibold text-purple-700">{fmtCurrency(plan.new_salary)}</p>
+                        <Badge variant={isUrgent ? 'amber' : 'gray'}>
+                          {isUrgent ? `${daysUntil}d` : fmtDate(plan.effective_date)}
+                        </Badge>
+                      </div>
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Salary overview */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
@@ -331,27 +434,23 @@ export default async function DashboardPage() {
               </span>
             </div>
             <div className="space-y-4">
-              {(['junior', 'pleno', 'senior'] as MacroKey[]).map(macro => {
+              {macroKeys.map(macro => {
                 const s = salaryByMacro[macro]
-                if (s.count === 0) return null
+                if (!s || s.count === 0) return null
                 const avg = s.total / s.count
-
-                // compute relative width for viz
                 const maxAvgAll = Math.max(
-                  ...(['junior', 'pleno', 'senior'] as MacroKey[]).map(m =>
-                    salaryByMacro[m].count > 0 ? salaryByMacro[m].total / salaryByMacro[m].count : 0
-                  )
+                  ...macroKeys.map(m => salaryByMacro[m]?.count > 0 ? salaryByMacro[m].total / salaryByMacro[m].count : 0)
                 )
                 const barWidth = maxAvgAll > 0 ? (avg / maxAvgAll) * 100 : 0
-                const barColor = { junior: 'bg-amber-400', pleno: 'bg-blue-500', senior: 'bg-purple-500' }[macro]
+                const barColor = macro === 'junior' ? 'bg-amber-400' : macro === 'pleno' ? 'bg-blue-500' : macro === 'senior' ? 'bg-purple-500' : 'bg-slate-400'
+                const variant = macro === 'junior' ? 'amber' : macro === 'pleno' ? 'blue' : macro === 'senior' ? 'purple' : 'gray'
+                const label = MACRO_LABELS[macro as MacroRole] ?? (macro.charAt(0).toUpperCase() + macro.slice(1))
 
                 return (
                   <div key={macro}>
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <Badge variant={macro === 'junior' ? 'amber' : macro === 'pleno' ? 'blue' : 'purple'}>
-                          {MACRO_LABELS[macro]}
-                        </Badge>
+                        <Badge variant={variant as 'amber' | 'blue' | 'purple' | 'gray'}>{label}</Badge>
                         <span className="text-xs text-slate-400">{s.count} pessoa{s.count > 1 ? 's' : ''}</span>
                       </div>
                       <div className="text-xs text-right">
@@ -382,7 +481,7 @@ export default async function DashboardPage() {
               <p className="text-sm text-slate-400 text-center py-8">Nenhuma férias agendada</p>
             ) : (
               <div className="divide-y divide-slate-100">
-                {upcomingVacations.slice(0, 6).map((v, i) => (
+                {upcomingVacations.slice(0, 5).map((v, i) => (
                   <Link key={i} href={`/collaborators/${v.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
                     <Avatar name={v.name} size="sm" />
                     <div className="flex-1 min-w-0">
@@ -401,7 +500,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Col 3: Alerts + Anniversaries */}
+        {/* Col 3: Alerts + Anniversaries + Quick actions */}
         <div className="space-y-5">
 
           {/* Urgent alerts */}
@@ -483,9 +582,9 @@ export default async function DashboardPage() {
             <div className="space-y-2">
               {[
                 { label: '+ Novo colaborador', href: '/collaborators/new', color: 'bg-blue-600 hover:bg-blue-700 text-white' },
+                { label: 'Gerenciar equipes', href: '/teams', color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300' },
                 { label: 'Agendar férias', href: '/vacations', color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300' },
                 { label: 'Editar grelha salarial', href: '/grid', color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300' },
-                { label: 'Ver todos os colaboradores', href: '/collaborators', color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300' },
               ].map(a => (
                 <Link key={a.href} href={a.href} className={`block text-center text-sm font-medium px-3 py-2 rounded-lg transition-colors ${a.color}`}>
                   {a.label}

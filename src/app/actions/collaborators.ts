@@ -34,88 +34,114 @@ async function logAudit(
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
-export async function createCollaborator(data: CollaboratorFormValues) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Não autenticado')
+export async function createCollaborator(
+  data: CollaboratorFormValues
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Sessão expirada. Faça login novamente.' }
 
-  const full_title = buildTitle(data.macro_role, data.grid_level)
+    const full_title = buildTitle(data.macro_role, data.grid_level)
 
-  const { data: collab, error } = await supabase
-    .from('collaborators')
-    .insert({
-      name: data.name.trim(),
-      email: data.email.trim().toLowerCase(),
+    const { data: collab, error } = await supabase
+      .from('collaborators')
+      .insert({
+        name: data.name.trim(),
+        email: data.email.trim().toLowerCase(),
+        macro_role: data.macro_role,
+        grid_level: data.grid_level,
+        full_title,
+        team: data.team?.trim() ?? '',
+        team_id: data.team_id ?? null,
+        team_level: data.team_level ?? null,
+        manager: data.manager?.trim() ?? '',
+        admission_date: data.admission_date,
+        current_salary: data.current_salary,
+        last_raise_date: data.last_raise_date || null,
+        last_promotion_date: data.last_promotion_date || null,
+        next_level_forecast: data.next_level_forecast || null,
+        promotion_forecast_date: data.promotion_forecast_date || null,
+        status: data.status,
+        notes: data.notes || null,
+      })
+      .select()
+      .single()
+
+    if (error) return { error: error.message }
+
+    await logAudit(supabase, user.email!, 'collaborator', collab.id, collab.name, 'create', {
       macro_role: data.macro_role,
       grid_level: data.grid_level,
-      full_title,
-      team: data.team.trim(),
-      manager: data.manager.trim(),
-      admission_date: data.admission_date,
-      current_salary: data.current_salary,
-      last_raise_date: data.last_raise_date || null,
-      last_promotion_date: data.last_promotion_date || null,
-      next_level_forecast: data.next_level_forecast || null,
-      promotion_forecast_date: data.promotion_forecast_date || null,
-      status: data.status,
-      notes: data.notes || null,
+      team: data.team,
+      team_id: data.team_id,
+      team_level: data.team_level,
     })
-    .select()
-    .single()
 
-  if (error) throw new Error(error.message)
-
-  await logAudit(supabase, user.email!, 'collaborator', collab.id, collab.name, 'create', {
-    macro_role: data.macro_role,
-    grid_level: data.grid_level,
-    team: data.team,
-  })
-
-  revalidatePath('/collaborators')
-  redirect(`/collaborators/${collab.id}`)
+    revalidatePath('/collaborators')
+    redirect(`/collaborators/${collab.id}`)
+  } catch (e: unknown) {
+    // redirect() throws — rethrow it; catch actual errors
+    if (e && typeof e === 'object' && 'digest' in e) throw e
+    console.error('[createCollaborator]', e)
+    return { error: 'Ocorreu um erro inesperado. Tente novamente.' }
+  }
 }
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
-export async function updateCollaborator(id: string, data: CollaboratorFormValues) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Não autenticado')
+export async function updateCollaborator(
+  id: string,
+  data: CollaboratorFormValues
+): Promise<{ error?: string }> {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Sessão expirada. Faça login novamente.' }
 
-  const full_title = buildTitle(data.macro_role, data.grid_level)
+    const full_title = buildTitle(data.macro_role, data.grid_level)
 
-  const { error } = await supabase
-    .from('collaborators')
-    .update({
-      name: data.name.trim(),
-      email: data.email.trim().toLowerCase(),
+    const { error } = await supabase
+      .from('collaborators')
+      .update({
+        name: data.name.trim(),
+        email: data.email.trim().toLowerCase(),
+        macro_role: data.macro_role,
+        grid_level: data.grid_level,
+        full_title,
+        team: data.team?.trim() ?? '',
+        team_id: data.team_id ?? null,
+        team_level: data.team_level ?? null,
+        manager: data.manager?.trim() ?? '',
+        admission_date: data.admission_date,
+        current_salary: data.current_salary,
+        last_raise_date: data.last_raise_date || null,
+        last_promotion_date: data.last_promotion_date || null,
+        next_level_forecast: data.next_level_forecast || null,
+        promotion_forecast_date: data.promotion_forecast_date || null,
+        status: data.status,
+        notes: data.notes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+
+    if (error) return { error: error.message }
+
+    await logAudit(supabase, user.email!, 'collaborator', id, data.name, 'update', {
       macro_role: data.macro_role,
       grid_level: data.grid_level,
-      full_title,
-      team: data.team.trim(),
-      manager: data.manager.trim(),
-      admission_date: data.admission_date,
-      current_salary: data.current_salary,
-      last_raise_date: data.last_raise_date || null,
-      last_promotion_date: data.last_promotion_date || null,
-      next_level_forecast: data.next_level_forecast || null,
-      promotion_forecast_date: data.promotion_forecast_date || null,
-      status: data.status,
-      notes: data.notes || null,
-      updated_at: new Date().toISOString(),
+      team_id: data.team_id,
+      team_level: data.team_level,
     })
-    .eq('id', id)
 
-  if (error) throw new Error(error.message)
-
-  await logAudit(supabase, user.email!, 'collaborator', id, data.name, 'update', {
-    macro_role: data.macro_role,
-    grid_level: data.grid_level,
-  })
-
-  revalidatePath(`/collaborators/${id}`)
-  revalidatePath('/collaborators')
-  redirect(`/collaborators/${id}`)
+    revalidatePath(`/collaborators/${id}`)
+    revalidatePath('/collaborators')
+    redirect(`/collaborators/${id}`)
+  } catch (e: unknown) {
+    if (e && typeof e === 'object' && 'digest' in e) throw e
+    console.error('[updateCollaborator]', e)
+    return { error: 'Ocorreu um erro inesperado. Tente novamente.' }
+  }
 }
 
 // ─── Register Promotion ───────────────────────────────────────────────────────
@@ -279,6 +305,7 @@ export async function deleteCollaborator(id: string, collaborator_name?: string)
   await supabase.from('vacations').delete().eq('collaborator_id', id)
   await supabase.from('promotion_history').delete().eq('collaborator_id', id)
   await supabase.from('salary_history').delete().eq('collaborator_id', id)
+  await supabase.from('promotion_plans').delete().eq('collaborator_id', id)
 
   const { error } = await supabase.from('collaborators').delete().eq('id', id)
   if (error) throw new Error(error.message)

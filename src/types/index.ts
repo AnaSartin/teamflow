@@ -1,9 +1,20 @@
 // ─── Enums / Literals ─────────────────────────────────────────────────────────
 
-export type MacroRole = 'junior' | 'pleno' | 'senior'
-export type GridLevel = 1 | 2 | 3 | 4
+export type MacroRole = 'junior' | 'pleno' | 'senior' | (string & {})
+export type GridLevel = number
 export type CollaboratorStatus = 'active' | 'vacation' | 'leave' | 'terminated'
 export type VacationStatus = 'not_scheduled' | 'scheduled' | 'ongoing' | 'completed' | 'expired'
+export type PromotionPlanStatus = 'planned' | 'applied' | 'cancelled'
+
+// ─── Teams ────────────────────────────────────────────────────────────────────
+
+export interface Team {
+  id: string
+  name: string
+  type: string | null
+  created_at: string
+  updated_at: string
+}
 
 // ─── Database row types (mirrors Supabase schema) ─────────────────────────────
 
@@ -15,11 +26,14 @@ export interface Collaborator {
   grid_level: GridLevel
   full_title: string
   team: string
+  team_id: string | null
+  team_level: string | null          // 'N1' | 'N2' | 'Coordenação' | null
   manager: string
-  admission_date: string          // ISO date
+  admission_date: string             // ISO date
   current_salary: number
   last_raise_date: string | null
   last_promotion_date: string | null
+  last_vacation_date: string | null  // ISO date of last completed vacation
   next_level_forecast: string | null
   promotion_forecast_date: string | null
   status: CollaboratorStatus
@@ -79,6 +93,25 @@ export interface SalaryHistory {
   created_at: string
 }
 
+// ─── Promotion Plans ──────────────────────────────────────────────────────────
+
+export interface PromotionPlan {
+  id: string
+  collaborator_id: string
+  new_macro_role: MacroRole
+  new_grid_level: GridLevel
+  new_full_title: string
+  new_salary: number
+  effective_date: string            // ISO date
+  status: PromotionPlanStatus
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  // joined
+  collaborator?: Pick<Collaborator, 'id' | 'name' | 'team' | 'current_salary' | 'macro_role' | 'grid_level'>
+}
+
 export interface NotificationSetting {
   id: string
   user_id: string
@@ -116,8 +149,8 @@ export interface CollaboratorWithMeta extends Collaborator {
 
 export interface DashboardStats {
   total_active: number
-  by_macro: Record<MacroRole, number>
-  by_level: Record<GridLevel, number>
+  by_macro: Record<string, number>
+  by_level: Record<string, number>
   on_vacation: number
   vacations_expiring_soon: number   // within 90 days
   vacations_expired: number
@@ -133,6 +166,8 @@ export interface CollaboratorFormValues {
   macro_role: MacroRole
   grid_level: GridLevel
   team: string
+  team_id: string | null
+  team_level: string | null
   manager: string
   admission_date: string
   current_salary: number

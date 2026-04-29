@@ -9,12 +9,14 @@ import {
   CalendarDays,
   Settings,
   ChevronRight,
+  UsersRound,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 
 const NAV = [
   { href: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/collaborators', icon: Users,            label: 'Colaboradores' },
+  { href: '/teams',         icon: UsersRound,       label: 'Equipes' },
   { href: '/grid',          icon: Grid3X3,          label: 'Grelha Salarial' },
   { href: '/vacations',     icon: CalendarDays,     label: 'Agenda de Férias' },
   { href: '/settings',      icon: Settings,         label: 'Configurações' },
@@ -64,7 +66,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-slate-800">
-        <p className="text-[11px] text-slate-600">v1.0 · Sistema interno</p>
+        <p className="text-[11px] text-slate-600">v2.0 · Sistema interno</p>
       </div>
     </aside>
   )
