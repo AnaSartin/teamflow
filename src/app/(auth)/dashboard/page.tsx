@@ -7,8 +7,12 @@ import {
   parseISO,
   addYears,
   addMonths,
+  addDays,
   format,
+  startOfMonth,
+  endOfMonth,
   isBefore,
+  isAfter,
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { Avatar, Badge } from '@/components/ui'
@@ -126,9 +130,21 @@ export default async function DashboardPage() {
   let vacExpiredCount   = 0
   let vacExpiringCount  = 0
 
-  // ── Upcoming vacations ────────────────────────────────────────────────────
+  // ── Upcoming vacations (future scheduled only) ───────────────────────────
   const upcomingVacations: Array<{
-    id: string; name: string; start: string; end: string | null; daysLeft: number
+    id: string; name: string; team: string
+    start: string; end: string | null
+    duration: number; status: string
+  }> = []
+
+  // ── Férias neste mês (start, end ou ongoing dentro do mês atual) ──────────
+  const monthStart = startOfMonth(today)
+  const monthEnd   = endOfMonth(today)
+
+  const thisMonthVacations: Array<{
+    id: string; name: string; team: string
+    start: string; lastDay: string; returnDate: string
+    duration: number; status: string
   }> = []
 
   // ── Anniversaries in 30 days ──────────────────────────────────────────────
@@ -201,13 +217,38 @@ export default async function DashboardPage() {
           priority: 'medium',
         })
       }
-      if (v.scheduled_start && (v.status === 'scheduled' || v.status === 'ongoing')) {
+      // Upcoming: scheduled, starts in the future
+      if (v.scheduled_start && v.status === 'scheduled' && isAfter(parseISO(v.scheduled_start), today)) {
+        const dur = v.scheduled_end
+          ? differenceInDays(parseISO(v.scheduled_end), parseISO(v.scheduled_start))
+          : 0
         upcomingVacations.push({
-          id: c.id, name: c.name,
+          id: c.id, name: c.name, team: c.team,
           start: v.scheduled_start,
           end: v.scheduled_end || null,
-          daysLeft: days,
+          duration: dur,
+          status: v.status,
         })
+      }
+
+      // This month: overlaps with current month (any status with scheduled dates)
+      if (v.scheduled_start && v.scheduled_end) {
+        const vStart = parseISO(v.scheduled_start)
+        const vEnd   = parseISO(v.scheduled_end)  // return-to-work day
+        const overlaps =
+          !isAfter(vStart, monthEnd) && !isBefore(vEnd, monthStart)
+        if (overlaps && v.status !== 'not_scheduled') {
+          const dur = differenceInDays(vEnd, vStart)
+          const lastDay = addDays(vEnd, -1)
+          thisMonthVacations.push({
+            id: c.id, name: c.name, team: c.team,
+            start: v.scheduled_start,
+            lastDay: format(lastDay, 'yyyy-MM-dd'),
+            returnDate: v.scheduled_end,
+            duration: dur,
+            status: v.status,
+          })
+        }
       }
     }
 
@@ -233,8 +274,9 @@ export default async function DashboardPage() {
     return p[a.priority] - p[b.priority]
   })
 
-  // Upcoming sorted by start date
+  // Sort by start date
   upcomingVacations.sort((a, b) => a.start.localeCompare(b.start))
+  thisMonthVacations.sort((a, b) => a.start.localeCompare(b.start))
 
   // Promotion plans financial impact
   const plansImpact = plans.reduce((sum, p) => {
@@ -471,30 +513,121 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Upcoming vacations */}
+          {/* Férias neste mês */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-800">Próximas férias agendadas</h2>
+              <div>
+                <h2 className="text-sm font-semibold text-slate-800">Férias neste mês</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {format(today, 'MMMM yyyy', { locale: ptBR })}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {thisMonthVacations.length > 0 && (
+                  <span className="text-xs font-medium bg-blue-100 text-blue-700 rounded-full px-2 py-0.5">
+                    {thisMonthVacations.length}
+                  </span>
+                )}
+                <Link href="/vacations" className="text-xs text-blue-600 hover:underline">Ver agenda →</Link>
+              </div>
+            </div>
+            {thisMonthVacations.length === 0 ? (
+              <div className="px-4 py-8 text-center">
+                <p className="text-slate-400 text-sm">Nenhuma férias neste mês</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100">
+                      <th className="text-left text-xs font-medium text-slate-500 px-4 py-2">Colaborador</th>
+                      <th className="text-left text-xs font-medium text-slate-500 px-4 py-2 hidden md:table-cell">Equipe</th>
+                      <th className="text-left text-xs font-medium text-slate-500 px-4 py-2">Período</th>
+                      <th className="text-left text-xs font-medium text-slate-500 px-4 py-2 hidden sm:table-cell">Duração</th>
+                      <th className="text-left text-xs font-medium text-slate-500 px-4 py-2 hidden lg:table-cell">Retorno</th>
+                      <th className="text-left text-xs font-medium text-slate-500 px-4 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {thisMonthVacations.map((v, i) => {
+                      const statusMap: Record<string, { label: string; variant: 'blue' | 'green' | 'gray' | 'amber' }> = {
+                        scheduled: { label: 'Agendada',    variant: 'blue'  },
+                        ongoing:   { label: 'Em andamento', variant: 'green' },
+                        completed: { label: 'Finalizada',  variant: 'gray'  },
+                      }
+                      const st = statusMap[v.status] ?? { label: v.status, variant: 'gray' as const }
+                      return (
+                        <tr key={i} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <Link href={`/collaborators/${v.id}`} className="flex items-center gap-2.5 hover:underline">
+                              <Avatar name={v.name} size="sm" />
+                              <span className="text-sm font-medium text-slate-800 truncate max-w-[120px]">{v.name}</span>
+                            </Link>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-500 hidden md:table-cell">{v.team || '—'}</td>
+                          <td className="px-4 py-3 text-xs text-slate-700">
+                            <span className="font-medium">{fmtDate(v.start)}</span>
+                            <span className="text-slate-400 mx-1">→</span>
+                            <span className="font-medium">{fmtDate(v.lastDay)}</span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-slate-600 hidden sm:table-cell">
+                            {v.duration} dia{v.duration !== 1 ? 's' : ''}
+                          </td>
+                          <td className="px-4 py-3 hidden lg:table-cell">
+                            <span className="text-xs font-medium text-emerald-700">{fmtDate(v.returnDate)}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant={st.variant}>{st.label}</Badge>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Próximas férias agendadas */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-800">Próximas férias agendadas</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Agendamentos futuros confirmados</p>
+              </div>
               <Link href="/vacations" className="text-xs text-blue-600 hover:underline">Ver tudo →</Link>
             </div>
             {upcomingVacations.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-8">Nenhuma férias agendada</p>
+              <p className="text-sm text-slate-400 text-center py-8">Nenhum agendamento futuro</p>
             ) : (
               <div className="divide-y divide-slate-100">
-                {upcomingVacations.slice(0, 5).map((v, i) => (
-                  <Link key={i} href={`/collaborators/${v.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
-                    <Avatar name={v.name} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">{v.name}</p>
-                      <p className="text-xs text-slate-400">
-                        {fmtDate(v.start)}{v.end ? ` → ${fmtDate(v.end)}` : ''}
-                      </p>
-                    </div>
-                    <Badge variant={v.daysLeft < 0 ? 'red' : v.daysLeft <= 30 ? 'amber' : 'gray'}>
-                      {v.daysLeft < 0 ? 'Vencida' : `${v.daysLeft}d`}
-                    </Badge>
-                  </Link>
-                ))}
+                {upcomingVacations.slice(0, 6).map((v, i) => {
+                  const daysUntil = differenceInDays(parseISO(v.start), today)
+                  return (
+                    <Link key={i} href={`/collaborators/${v.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors">
+                      <Avatar name={v.name} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 truncate">{v.name}</p>
+                        <p className="text-xs text-slate-400 truncate">
+                          {v.team && <span className="mr-2">{v.team} ·</span>}
+                          {fmtDate(v.start)}
+                          {v.end ? ` → ${fmtDate(v.end)}` : ''}
+                          {v.duration > 0 ? ` · ${v.duration}d` : ''}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <Badge variant={daysUntil <= 7 ? 'amber' : 'blue'}>
+                          em {daysUntil}d
+                        </Badge>
+                        {v.end && (
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            retorno {fmtDate(v.end)}
+                          </p>
+                        )}
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
             )}
           </div>
